@@ -1,0 +1,24 @@
+# .NET
+**/bin/
+**/obj/
+**/TestResults/
+*.user
+*.suo
+.vs/
+
+# Frontend
+**/node_modules/
+**/dist/
+**/coverage/
+*.tsbuildinfo
+*.log
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+**/appsettings.Local.json
+
+# Editors and operating system
+.idea/
+.DS_Store

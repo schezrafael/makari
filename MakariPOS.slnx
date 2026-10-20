@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Makari.Api/Makari.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Makari.Api.Tests/Makari.Api.Tests.csproj" />
+  </Folder>
+</Solution>

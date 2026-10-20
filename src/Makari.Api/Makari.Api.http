@@ -1,0 +1,6 @@
+@Makari.Api_HostAddress = http://localhost:5080
+
+GET {{Makari.Api_HostAddress}}/health
+Accept: application/json
+
+###
