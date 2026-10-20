@@ -3,6 +3,7 @@ using Makari.Api.Features.Catalog.Persistence;
 using Makari.Api.Features.Health;
 using Makari.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,6 +11,12 @@ builder.Services.AddDbContext<MakariDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Makari")
         ?? builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddScoped<GetCatalogHandler>();
+
+// Features
+builder.Services.AddScoped<GetCatalogHandler>();
+
+// OpenAPI
+builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
@@ -21,6 +28,13 @@ if (args.Contains("--seed-catalog", StringComparer.Ordinal))
     await CatalogSeeder.SeedAsync(context);
     Console.WriteLine("Catalog initialization completed.");
     return;
+}
+
+// API documentation (development only)
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
 app.MapHealthEndpoint();
