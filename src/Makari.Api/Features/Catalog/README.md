@@ -23,6 +23,9 @@ las configuraciones Fluent API; el contexto las registra desde el ensamblado.
   único permite como máximo un precio por variante y tipo de cliente.
 
 Las pruebas cubren el dominio, el modelo EF, el DDL generado y el seguimiento de
-cambios sin abrir conexiones. No se ejecuta ese DDL, no se crean migraciones ni
-se modifica ninguna base de datos. La aplicación real de las restricciones queda
-pendiente para el incremento de migraciones y pruebas contra PostgreSQL.
+cambios sin abrir conexiones.
+
+M0.2.2 incorpora la migración `InitialCatalog` y un comando explícito de seed.
+Consultar [INITIALIZATION.md](INITIALIZATION.md) para el destino, autorización,
+identificadores estables y procedimiento de aplicación. El arranque normal
+de la API sigue sin modificar el esquema ni inicializar datos.
