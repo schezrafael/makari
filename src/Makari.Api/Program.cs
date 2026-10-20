@@ -1,3 +1,4 @@
+using Makari.Api.Features.Catalog.GetCatalog;
 using Makari.Api.Features.Catalog.Persistence;
 using Makari.Api.Features.Health;
 using Makari.Api.Infrastructure.Persistence;
@@ -8,6 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<MakariDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Makari")
         ?? builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddScoped<GetCatalogHandler>();
 
 var app = builder.Build();
 
@@ -22,6 +24,7 @@ if (args.Contains("--seed-catalog", StringComparer.Ordinal))
 }
 
 app.MapHealthEndpoint();
+app.MapGetCatalogEndpoint();
 app.Run();
 
 // Allows the integration tests to start the application in memory.

@@ -38,6 +38,7 @@ public static class CatalogSeeder
             """LOCK TABLE "Products", "ProductVariants", "ProductPrices" IN SHARE ROW EXCLUSIVE MODE""",
             cancellationToken);
         var products = await context.Products
+            .AsSplitQuery()
             .Include(product => product.Variants).ThenInclude(variant => variant.Prices)
             .ToListAsync(cancellationToken);
 
