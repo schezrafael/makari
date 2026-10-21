@@ -1,4 +1,5 @@
 using Makari.Api.Features.Catalog.Domain;
+using Makari.Api.Features.Sales.Domain;
 using Microsoft.EntityFrameworkCore;
 
 namespace Makari.Api.Infrastructure.Persistence;
@@ -9,6 +10,8 @@ public sealed class MakariDbContext(DbContextOptions<MakariDbContext> options)
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductVariant> ProductVariants => Set<ProductVariant>();
     public DbSet<ProductPrice> ProductPrices => Set<ProductPrice>();
+    public DbSet<Sale> Sales => Set<Sale>();
+    public DbSet<SaleItem> SaleItems => Set<SaleItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

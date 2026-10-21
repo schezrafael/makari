@@ -38,6 +38,17 @@ internal sealed class CatalogApiFactory : WebApplicationFactory<Program>
         await context.SaveChangesAsync();
     }
 
+    public async Task InstallSaleItemFailureAsync()
+    {
+        using var scope = Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<MakariDbContext>();
+        await context.Database.EnsureCreatedAsync();
+        await context.Database.ExecuteSqlRawAsync("""
+            CREATE TRIGGER RejectSaleItems BEFORE INSERT ON SaleItems
+            BEGIN SELECT RAISE(ABORT, 'forced atomicity test failure'); END;
+            """);
+    }
+
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
