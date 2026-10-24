@@ -1,7 +1,4 @@
-using Makari.Api.Features.Catalog.Domain;
 using Microsoft.AspNetCore.Http.HttpResults;
-using System.ComponentModel;
-using Microsoft.AspNetCore.Mvc;
 
 namespace Makari.Api.Features.Catalog.GetCatalog;
 
@@ -12,35 +9,27 @@ public static class GetCatalogEndpoint
         endpoints.MapGet("/api/catalog", HandleAsync)
             .WithName("GetCatalog")
             .WithTags("Catalog")
-            .WithSummary("Get active product catalog")
+            .WithSummary("Get active product catalog with visitor prices")
             .WithDescription(
-                "Returns active products with active prices. " +
-                "Required query parameter: customerType (Local or Visitor).");
+                "Returns active products and active variants with Visitor prices. No query parameters are required. " +
+                "The obsolete customerType query parameter is rejected with HTTP 400, regardless of its value.");
         return endpoints;
     }
 
     private static async Task<Results<Ok<GetCatalogResponse>, ValidationProblem>> HandleAsync(
-        [FromQuery]
-        [Description("Customer type: Local or Visitor.")]
-        string? customerType,
+        HttpRequest request,
         GetCatalogHandler handler,
         CancellationToken cancellationToken
     ){
-        // Do not use Enum.TryParse: numeric and combined values are not part of the HTTP contract.
-        CustomerType? parsed = customerType switch
-        {
-            nameof(CustomerType.Local) => CustomerType.Local,
-            nameof(CustomerType.Visitor) => CustomerType.Visitor,
-            _ => null
-        };
-        if (parsed is null)
+        // Reject legacy clients rather than silently returning Visitor prices for Local requests.
+        if (request.Query.ContainsKey("customerType"))
         {
             return TypedResults.ValidationProblem(new Dictionary<string, string[]>
             {
-                ["customerType"] = ["Specify customerType as Local or Visitor."]
+                ["customerType"] = ["customerType is no longer supported. Omit it; the catalog always returns Visitor prices."]
             });
         }
 
-        return TypedResults.Ok(await handler.HandleAsync(parsed.Value, cancellationToken));
+        return TypedResults.Ok(await handler.HandleAsync(cancellationToken));
     }
 }

@@ -4,16 +4,32 @@ using System.Text.Json;
 using Makari.Api.Features.Catalog.Domain;
 using Makari.Api.Features.Catalog.GetCatalog;
 using Makari.Api.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Makari.Api.Tests.Features.Catalog.GetCatalog;
 
 public sealed class GetCatalogTests
 {
-    [Theory]
-    [InlineData("Visitor", 60, 75)]
-    [InlineData("Local", 50, 60)]
-    public async Task GetCatalog_ReturnsOnlyRequestedPrices(string customerType, int naturalPrice, int citricPrice)
+    [Fact]
+    public async Task OpenApi_CatalogHasNoCustomerTypeParameter()
+    {
+        using var factory = new CatalogApiFactory();
+        using var development = factory.WithWebHostBuilder(builder => builder.UseEnvironment("Development"));
+        using var client = development.CreateClient();
+
+        using var response = await client.GetAsync("/openapi/v1.json");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var operation = json.RootElement.GetProperty("paths").GetProperty("/api/catalog").GetProperty("get");
+        Assert.False(operation.TryGetProperty("parameters", out var parameters) &&
+            parameters.EnumerateArray().Any(parameter => parameter.GetProperty("name").GetString() == "customerType"));
+        Assert.True(operation.GetProperty("responses").TryGetProperty("400", out _));
+    }
+
+    [Fact]
+    public async Task GetCatalog_WithoutParametersReturnsOnlyVisitorPrices()
     {
         using var factory = new CatalogApiFactory();
         var product = new Product("Cold Brew", "Café");
@@ -26,7 +42,7 @@ public sealed class GetCatalogTests
         await factory.InitializeAsync(product);
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync($"/api/catalog?customerType={customerType}");
+        using var response = await client.GetAsync("/api/catalog");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<GetCatalogResponse>();
@@ -35,8 +51,8 @@ public sealed class GetCatalogTests
         Assert.Equal("Cold Brew", result.Name);
         Assert.Equal("Café", result.Category);
         Assert.Equal(2, result.Variants.Count);
-        Assert.Equal((decimal)naturalPrice, Assert.Single(result.Variants, v => v.Id == natural.Id).Price);
-        Assert.Equal((decimal)citricPrice, Assert.Single(result.Variants, v => v.Id == citric.Id).Price);
+        Assert.Equal(60m, Assert.Single(result.Variants, v => v.Id == natural.Id).Price);
+        Assert.Equal(75m, Assert.Single(result.Variants, v => v.Id == citric.Id).Price);
         Assert.All(result.Variants, variant => Assert.Equal(500, variant.SizeMl));
 
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -48,7 +64,10 @@ public sealed class GetCatalogTests
     }
 
     [Theory]
-    [InlineData("")]
+    [InlineData("?customerType")]
+    [InlineData("?customerType=Local")]
+    [InlineData("?customerType=Visitor")]
+    [InlineData("?CustomerType=Local")]
     [InlineData("?customerType=")]
     [InlineData("?customerType=Unknown")]
     [InlineData("?customerType=0")]
@@ -57,7 +76,7 @@ public sealed class GetCatalogTests
     [InlineData("?customerType=visitor")]
     [InlineData("?customerType=Local%2CVisitor")]
     [InlineData("?customerType=Local&customerType=Visitor")]
-    public async Task GetCatalog_RejectsInvalidCustomerTypeBeforeQuerying(string query)
+    public async Task GetCatalog_RejectsObsoleteCustomerTypeBeforeQuerying(string query)
     {
         using var factory = new CatalogApiFactory();
         // Deliberately do not create any tables: validation must happen before querying.
@@ -80,7 +99,7 @@ public sealed class GetCatalogTests
         await factory.InitializeAsync(active, inactive);
         using var client = factory.CreateClient();
 
-        var body = await client.GetFromJsonAsync<GetCatalogResponse>("/api/catalog?customerType=Visitor");
+        var body = await client.GetFromJsonAsync<GetCatalogResponse>("/api/catalog");
 
         Assert.Equal(active.Id, Assert.Single(body!.Products).Id);
     }
@@ -96,25 +115,22 @@ public sealed class GetCatalogTests
         await factory.InitializeAsync(product);
         using var client = factory.CreateClient();
 
-        var body = await client.GetFromJsonAsync<GetCatalogResponse>("/api/catalog?customerType=Visitor");
+        var body = await client.GetFromJsonAsync<GetCatalogResponse>("/api/catalog");
 
         Assert.Equal("Natural", Assert.Single(Assert.Single(body!.Products).Variants).Name);
     }
 
-    [Theory]
-    [InlineData(CustomerType.Visitor, CustomerType.Local)]
-    [InlineData(CustomerType.Local, CustomerType.Visitor)]
-    public async Task GetCatalog_ExcludesVariantsWithoutApplicablePrice(
-        CustomerType requested, CustomerType available)
+    [Fact]
+    public async Task GetCatalog_ExcludesVariantsWithoutVisitorPrice()
     {
         using var factory = new CatalogApiFactory();
         var product = new Product("Cold Brew", "Café");
-        product.AddVariant("Other customer type", 500).AddPrice(available, 50m);
+        product.AddVariant("Other customer type", 500).AddPrice(CustomerType.Local, 50m);
         product.AddVariant("No prices", 500);
         await factory.InitializeAsync(product);
         using var client = factory.CreateClient();
 
-        var body = await client.GetFromJsonAsync<GetCatalogResponse>($"/api/catalog?customerType={requested}");
+        var body = await client.GetFromJsonAsync<GetCatalogResponse>("/api/catalog");
 
         Assert.Empty(Assert.Single(body!.Products).Variants);
     }
@@ -126,7 +142,7 @@ public sealed class GetCatalogTests
         await factory.InitializeAsync();
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync("/api/catalog?customerType=Visitor");
+        using var response = await client.GetAsync("/api/catalog");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("{\"products\":[]}", await response.Content.ReadAsStringAsync());
@@ -143,7 +159,7 @@ public sealed class GetCatalogTests
         await factory.InitializeAsync(last, first);
         using var client = factory.CreateClient();
 
-        var body = await client.GetFromJsonAsync<GetCatalogResponse>("/api/catalog?customerType=Visitor");
+        var body = await client.GetFromJsonAsync<GetCatalogResponse>("/api/catalog");
 
         Assert.Equal(new[] { "Alpha", "Zebra" }, body!.Products.Select(product => product.Name));
         Assert.Equal(new[] { "Alpha", "Zebra" }, body.Products[0].Variants.Select(variant => variant.Name));
@@ -158,7 +174,7 @@ public sealed class GetCatalogTests
         var context = scope.ServiceProvider.GetRequiredService<MakariDbContext>();
         var handler = scope.ServiceProvider.GetRequiredService<GetCatalogHandler>();
 
-        var response = await handler.HandleAsync(CustomerType.Visitor);
+        var response = await handler.HandleAsync();
 
         Assert.Single(response.Products);
         Assert.Empty(context.ChangeTracker.Entries());

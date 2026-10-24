@@ -1,19 +1,25 @@
-# GetCatalog — M0.2.3
+# GetCatalog — M0.5: precios base Visitor
 
 ```http
-GET /api/catalog?customerType=Visitor
-GET /api/catalog?customerType=Local
+GET /api/catalog
 ```
 
-`customerType` es obligatorio y admite exactamente `Local` o `Visitor`, con
-esas mayúsculas. Valores ausentes, vacíos, numéricos, combinados o desconocidos
-devuelven HTTP 400 con un problema de validación para `customerType`.
+El endpoint no requiere parámetros y devuelve exclusivamente precios `CustomerType.Visitor`.
+El formato de `GetCatalogResponse` no cambia: `{ "products": [{ "id", "name",
+"category", "variants": [{ "id", "name", "sizeMl", "price" }] }] }` (esquema ilustrativo).
+
+El parámetro obsoleto `customerType` se **rechaza con HTTP 400** y
+`application/problem+json`, con un error en `errors.customerType`, antes de consultar
+la base. Se rechaza cualquier valor, incluidos `Local`, `Visitor`, vacío, sin valor
+expreso o repetido; el nombre del parámetro no distingue mayúsculas de minúsculas.
+Así se evita que un cliente solicite precios Local y reciba Visitor silenciosamente.
+`customerType` ya no se anuncia como parámetro en OpenAPI.
 
 `Endpoint` valida y entrega el resultado; `Handler` recibe `MakariDbContext`
 directamente y realiza una proyección SQL sin tracking ni carga de entidades.
 Los DTOs de `Response` definen el contrato público.
 
-- Solo productos activos y variantes activas con precio para el tipo solicitado.
+- Solo productos activos y variantes activas con precio Visitor; se excluyen las variantes con solo precio Local o sin precios.
 - Cada variante expone un único `price`, sin listas de precios ni relaciones EF.
 - Productos y variantes ordenados por nombre usando la collation de la base;
   el ID desempata nombres iguales. El catálogo inicial queda Cítrico, Natural.
@@ -35,3 +41,32 @@ La consulta de `CatalogSeeder` usa `AsSplitQuery` dentro de la transacción y de
 bloqueo de tablas existentes. Conserva tracking para insertar los datos faltantes;
 la consulta de GetCatalog utiliza `AsNoTracking`. No se ejecuta el seed para
 probar este endpoint.
+
+## Compatibilidad
+
+Este cambio rompe el consumo del frontend M0.4, que todavía envía
+`?customerType=Local|Visitor`: recibirá HTTP 400 y mostrará error de catálogo.
+No se modifican archivos React en este incremento. Antes de usar ambos juntos,
+un incremento posterior deberá solicitar `/api/catalog` sin parámetros y adaptar
+el flujo de descuento local; no basta con quitar el parámetro si la pantalla sigue
+presentando estos importes como precios Local.
+
+`CreateSale` permanece intacto y sigue aceptando `CustomerType.Local` y
+`CustomerType.Visitor`, calculando sus respectivos precios en el servidor.
+Este incremento no implementa descuentos en la interfaz, no modifica `ProductPrice`
+ni `CustomerType`, no genera migraciones y no modifica registros de PostgreSQL.
+
+## Verificación
+
+Desde la raíz:
+
+```sh
+dotnet restore MakariPOS.slnx
+dotnet build MakariPOS.slnx --no-restore
+dotnet test MakariPOS.slnx --no-build
+```
+
+Las pruebas cubren consulta sin parámetros, precios Visitor, rechazo del parámetro
+obsoleto, productos y variantes inactivos, variantes sin precio Visitor, catálogo
+vacío, orden por nombre y ausencia de tracking. Se ejecuta también la suite existente
+de CreateSale sin modificarla.

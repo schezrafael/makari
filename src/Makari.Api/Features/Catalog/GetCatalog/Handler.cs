@@ -7,7 +7,7 @@ namespace Makari.Api.Features.Catalog.GetCatalog;
 public sealed class GetCatalogHandler(MakariDbContext context)
 {
     public async Task<GetCatalogResponse> HandleAsync(
-        CustomerType customerType, CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default)
     {
         var products = await context.Products
             .AsNoTracking()
@@ -19,14 +19,14 @@ public sealed class GetCatalogHandler(MakariDbContext context)
                 product.Category,
                 product.Variants
                     .Where(variant => variant.IsActive &&
-                        variant.Prices.Any(price => price.CustomerType == customerType))
+                        variant.Prices.Any(price => price.CustomerType == CustomerType.Visitor))
                     .OrderBy(variant => variant.Name).ThenBy(variant => variant.Id)
                     .Select(variant => new CatalogVariantResponse(
                         variant.Id,
                         variant.Name,
                         variant.SizeMl,
                         variant.Prices
-                            .Where(price => price.CustomerType == customerType)
+                            .Where(price => price.CustomerType == CustomerType.Visitor)
                             .Select(price => price.Amount)
                             .First()))
                     .ToList()))
