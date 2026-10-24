@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -32,19 +31,7 @@ public sealed class CreateSaleHandler(MakariDbContext context, IConfiguration co
 
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         var variantIds = request.Items.Select(item => item.ProductVariantId).ToArray();
-        var prices = await context.ProductVariants
-            .AsNoTracking()
-            .Where(variant => variantIds.Contains(variant.Id) && variant.IsActive && variant.Product.IsActive)
-            .Select(variant => new
-            {
-                variant.Id,
-                Price = variant.Prices
-                    .Where(price => price.CustomerType == request.CustomerType)
-                    .Select(price => (decimal?)price.Amount)
-                    .SingleOrDefault()
-            })
-            .ToListAsync(cancellationToken);
-
+        var prices = await SalePricing.LoadAsync(context, variantIds, request.CustomerType, cancellationToken);
         var priceByVariant = prices.ToDictionary(item => item.Id, item => item.Price);
         var unavailable = variantIds
             .Where(id => !priceByVariant.TryGetValue(id, out var price) || price is null)

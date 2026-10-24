@@ -17,7 +17,7 @@ public sealed class SaleItem
         ProductVariantId = productVariantId;
         Quantity = quantity;
         UnitPrice = unitPrice;
-        Subtotal = checked(unitPrice * quantity);
+        Subtotal = SaleAmounts.Subtotal(unitPrice, quantity);
     }
 
     public Guid Id { get; private set; }

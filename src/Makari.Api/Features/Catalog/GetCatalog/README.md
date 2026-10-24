@@ -46,10 +46,9 @@ probar este endpoint.
 
 Este cambio rompe el consumo del frontend M0.4, que todavía envía
 `?customerType=Local|Visitor`: recibirá HTTP 400 y mostrará error de catálogo.
-No se modifican archivos React en este incremento. Antes de usar ambos juntos,
-un incremento posterior deberá solicitar `/api/catalog` sin parámetros y adaptar
-el flujo de descuento local; no basta con quitar el parámetro si la pantalla sigue
-presentando estos importes como precios Local.
+M0.6 adapta el frontend a `/api/catalog` sin parámetros y aplica el descuento local
+mediante `POST /api/sales/quote`; los precios base del catálogo siguen siendo Visitor.
+El frontend M0.4 anterior continúa siendo incompatible.
 
 `CreateSale` permanece intacto y sigue aceptando `CustomerType.Local` y
 `CustomerType.Visitor`, calculando sus respectivos precios en el servidor.

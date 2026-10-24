@@ -1,7 +1,7 @@
-# Makari POS — M0.4 Sales UI
+# Makari POS — M0.6 Local Discount Flow
 
 Interfaz React + TypeScript para registrar ventas desde celular, tablet o escritorio.
-Catálogo por cliente, cantidades, resumen, efectivo/transferencia y confirmación modal.
+Catálogo Visitor, cantidades, descuento local, resumen, efectivo/transferencia y confirmación modal.
 El total estimado permanece fijo en móvil; el éxito muestra el total confirmado por la API.
 
 ## Ejecutar
@@ -33,8 +33,11 @@ No se desactiva la validación de certificados ni se configura CORS.
 
 ## Contratos verificados
 
-- `GET /api/catalog?customerType=Local|Visitor`: `{ products: [{ id, name, category,
+- `GET /api/catalog` (sin parámetros; precios Visitor): `{ products: [{ id, name, category,
   variants: [{ id, name, sizeMl, price }] }] }`.
+- `POST /api/sales/quote`: `{ customerType: "Local"|"Visitor", items: [{ productVariantId, quantity }] }`.
+  Devuelve `{ customerType, subtotal, discount, total, items }` con desglose por línea;
+  no crea ventas. Ver [contrato completo](../Makari.Api/Features/Sales/QuoteSale/README.md).
 - `POST /api/sales`: `{ idempotencyKey, customerType: "Local"|"Visitor",
   paymentMethod: "Cash"|"Transfer", items: [{ productVariantId, quantity }] }`.
 - Respuesta `201` nueva / `200` repetida: `{ id, createdAtUtc, customerType,
@@ -50,15 +53,32 @@ Un precio actualizado por la API se acepta y se muestra como total confirmado.
 ## Reintentos
 
 Se genera una clave con `crypto.randomUUID()` al primer envío. Un fallo conserva
-carrito y clave; reintentar envía el mismo pedido. Cambiar cantidades, tipo de cliente
+carrito y clave; reintentar envía el mismo pedido. Cambiar cantidades, descuento local
 o forma de pago invalida la clave anterior. Durante el envío se bloquean los controles
 y se impiden envíos simultáneos. Solo un éxito validado vacía el carrito.
 
 Ante un fallo de red, reintentar sin editar y sin volver a cobrar. La venta puede haberse
 guardado aunque la respuesta no haya llegado. El estado se conserva en memoria: recargar,
 cerrar la pestaña o navegar lo pierde. No hay recuperación entre sesiones ni modo offline.
-Cambiar cliente conserva cantidades y carga sus precios; una variante sin precio bloquea
-el cobro hasta volver al cliente anterior o quitar las variantes no disponibles.
+
+## Descuento local
+
+Las tarjetas y líneas del carrito muestran los precios Visitor como base. El pedido
+empieza sin descuento y se registra como Visitor. Activar «Descuento local» consulta
+la cotización Local; muestra subtotal Visitor, descuento monetario y total Local.
+Desactivarlo recupera inmediatamente el estimado Visitor y registra como Visitor.
+Después de una venta exitosa se vacía el carrito y se desactiva el descuento.
+
+Cada cambio de cantidades invalida la cotización. La clave del pedido, la cancelación
+de solicitudes y la comprobación del cuerpo evitan aplicar respuestas obsoletas.
+Mientras la cotización Local esté pendiente o fallida, no se muestra un total cobrable
+y se deshabilitan registro y confirmación. Hay reintento explícito de cotización.
+Cambiar solo el método de pago no requiere cotizar de nuevo.
+
+El servidor calcula el descuento a partir de precios vigentes, sin porcentajes ni
+importes enviados por el cliente. La cotización no congela precios: CreateSale vuelve
+a validarlos y su total es el definitivo. Si cambian entre cotizar y registrar, el
+operador debe conciliar el importe recibido con el total confirmado.
 
 ## Verificación
 
@@ -74,11 +94,12 @@ Las pruebas usan el runner de Node 24, sin dependencias nuevas. Cubren contratos
 carrito vacío, cambios de cliente/pago/cantidad, claves de reintento, respuestas ambiguas,
 precio confirmado y errores HTTP. No son pruebas de renderizado de componentes.
 
-Comprobación manual: cargar Local y Visitante, agregar/quitar variantes, revisar total,
-abrir/cancelar confirmación, cambiar pago y confirmar. Probar API detenida para el error
-de catálogo; cortar la conexión durante el registro y reintentar sin editar para comprobar
-idempotencia. Para ventas de prueba iniciar la API con
-`-- --Sales:RegisteredBy=M0.4-PRUEBA-UI` y conservar el folio del registro de prueba.
+Comprobación M0.6: catálogo sin parámetros, Visitor sin descuento, activar/desactivar
+descuento, cambiar cantidades, confirmación Local y error de cotización con API detenida.
+La creación exitosa Local/Visitor y reintento sin duplicación se prueban en integración
+sobre SQLite aislado; no se crean nuevas ventas en PostgreSQL durante esta verificación.
+Las pruebas Node incluyen respuestas tardías tras cancelación, errores de red/HTTP,
+validación de cotizaciones y conservación de claves. No hay pruebas DOM automatizadas.
 
 ## Resultado de verificación M0.4
 
