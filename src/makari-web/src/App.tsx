@@ -1,10 +1,5 @@
-function App() {
-  return (
-    <main>
-      <h1>Makari POS</h1>
-      <p>El punto de venta de Makari Drinks está en preparación.</p>
-    </main>
-  )
-}
+import SalesPage from './features/sales/SalesPage'
 
-export default App
+export default function App() {
+  return <SalesPage />
+}
