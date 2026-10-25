@@ -8,6 +8,8 @@ public static class CreateSaleValidator
         var errors = SaleOrderValidator.Validate(request.CustomerType, request.Items);
         if (request.IdempotencyKey == Guid.Empty) errors["idempotencyKey"] = ["A non-empty idempotency key is required."];
         if (!Enum.IsDefined(request.PaymentMethod)) errors["paymentMethod"] = ["Specify Cash or Transfer."];
+        if (request.ExpectedTotal is null or <= 0 || decimal.Round(request.ExpectedTotal.Value, 2) != request.ExpectedTotal.Value)
+            errors["expectedTotal"] = ["Specify a positive expectedTotal with at most two decimal places."];
         return errors;
     }
 }

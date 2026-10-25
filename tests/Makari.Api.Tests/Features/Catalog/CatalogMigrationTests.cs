@@ -8,12 +8,25 @@ namespace Makari.Api.Tests.Features.Catalog;
 public sealed class CatalogMigrationTests
 {
     [Fact]
+    public void RejectedAttempts_MigrationIsSchemaOnlyAndMatchesModel()
+    {
+        using var context = new MakariDbContext(new DbContextOptionsBuilder<MakariDbContext>()
+            .UseNpgsql("Host=localhost;Database=makari_migration_unit_tests").Options);
+        Assert.EndsWith("_AddRejectedSaleAttempts", context.Database.GetMigrations().Last());
+        Assert.False(context.Database.HasPendingModelChanges());
+        var sql = context.GetService<IMigrator>().GenerateScript("20261020220102_AddSales");
+        Assert.Contains("CREATE TABLE \"RejectedSaleAttempts\"", sql);
+        Assert.DoesNotContain("UPDATE \"ProductPrices\"", sql);
+        Assert.DoesNotContain("INSERT INTO \"Sales\"", sql);
+    }
+
+    [Fact]
     public void AddSales_MatchesCurrentModelAndContainsExpectedSalesSchema()
     {
         using var context = new MakariDbContext(new DbContextOptionsBuilder<MakariDbContext>()
             .UseNpgsql("Host=localhost;Database=makari_migration_unit_tests").Options);
 
-        Assert.EndsWith("_AddSales", context.Database.GetMigrations().Last());
+        Assert.Contains("20261020220102_AddSales", context.Database.GetMigrations());
         Assert.False(context.Database.HasPendingModelChanges());
         var sql = context.GetService<IMigrator>().GenerateScript("20261020170441_InitialCatalog", "20261020220102_AddSales");
 

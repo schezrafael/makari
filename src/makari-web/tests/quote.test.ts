@@ -17,12 +17,12 @@ test('cotización valida subtotal, descuento y total del pedido vigente', () => 
 
 test('activar/desactivar descuento cambia CustomerType y clave; reintento conserva clave', () => {
   const cart = { [id]: 2 }
-  const visitor = operation(makeOrder('Visitor', 'Cash', cart))
-  const local = operation(makeOrder('Local', 'Cash', cart), visitor)
+  const visitor = operation(makeOrder('Visitor', 'Cash', cart), 120)
+  const local = operation(makeOrder('Local', 'Cash', cart), 100)
   assert.equal(local.customerType, 'Local')
   assert.notEqual(visitor.idempotencyKey, local.idempotencyKey)
-  assert.equal(operation(makeOrder('Local', 'Cash', cart), local).idempotencyKey, local.idempotencyKey)
-  const reverted = operation(makeOrder('Visitor', 'Cash', cart), local)
+  assert.equal(operation(makeOrder('Local', 'Cash', cart), 100, local).idempotencyKey, local.idempotencyKey)
+  const reverted = operation(makeOrder('Visitor', 'Cash', cart), 120)
   assert.notEqual(reverted.idempotencyKey, local.idempotencyKey)
   assert.equal(reverted.customerType, 'Visitor')
 })

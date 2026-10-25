@@ -50,7 +50,7 @@ public sealed class CreateSaleTests
         using var client = factory.CreateClient();
         var request = NewRequest(natural.Id, 2) with
         {
-            Items = [new(natural.Id, 2), new(citric.Id, 1)]
+            Items = [new(natural.Id, 2), new(citric.Id, 1)], ExpectedTotal = 195m
         };
 
         using var response = await PostAsync(client, request);
@@ -81,7 +81,7 @@ public sealed class CreateSaleTests
         var product = ProductWithPrices(out var natural, out _);
         await factory.InitializeAsync(product);
         using var client = factory.CreateClient();
-        var request = NewRequest(natural.Id, 1) with { CustomerType = customerType };
+        var request = NewRequest(natural.Id, 1) with { CustomerType = customerType, ExpectedTotal = expected };
 
         using var response = await PostAsync(client, request);
         var sale = (await response.Content.ReadFromJsonAsync<CreateSaleResponse>(JsonOptions))!;
@@ -185,7 +185,7 @@ public sealed class CreateSaleTests
         await factory.InitializeAsync(product);
         using var client = factory.CreateClient();
         var key = Guid.NewGuid();
-        var json = $$"""{"idempotencyKey":"{{key}}","customerType":"Visitor","paymentMethod":"Transfer","registeredBy":"Mallory","total":0.01,"items":[{"productVariantId":"{{natural.Id}}","quantity":1,"unitPrice":0.01,"subtotal":0.01}]}""";
+        var json = $$"""{"idempotencyKey":"{{key}}","customerType":"Visitor","paymentMethod":"Transfer","registeredBy":"Mallory","total":0.01,"expectedTotal":60,"items":[{"productVariantId":"{{natural.Id}}","quantity":1,"unitPrice":0.01,"subtotal":0.01}]}""";
 
         using var response = await client.PostAsync("/api/sales", new StringContent(json, Encoding.UTF8, "application/json"));
         var sale = (await response.Content.ReadFromJsonAsync<CreateSaleResponse>(JsonOptions))!;
@@ -225,7 +225,7 @@ public sealed class CreateSaleTests
         var product = ProductWithPrices(out var natural, out var citric);
         await factory.InitializeAsync(product);
         using var client = factory.CreateClient();
-        var request = NewRequest(natural.Id, 2) with { Items = [new(natural.Id, 2), new(citric.Id, 1)] };
+        var request = NewRequest(natural.Id, 2) with { Items = [new(natural.Id, 2), new(citric.Id, 1)], ExpectedTotal = 195m };
 
         using var first = await PostAsync(client, request);
         using var retry = await PostAsync(client, request with { Items = request.Items.Reverse().ToArray() });
@@ -310,7 +310,7 @@ public sealed class CreateSaleTests
     }
 
     private static CreateSaleRequest NewRequest(Guid variantId, int quantity) => new(
-        Guid.NewGuid(), CustomerType.Visitor, PaymentMethod.Cash, [new(variantId, quantity)]);
+        Guid.NewGuid(), CustomerType.Visitor, PaymentMethod.Cash, [new(variantId, quantity)], 60m * Math.Max(1, quantity));
 
     private static Product ProductWithPrices(out ProductVariant natural, out ProductVariant citric)
     {

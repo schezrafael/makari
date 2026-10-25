@@ -555,3 +555,6 @@ dialog [role=status] {
 .price-breakdown { border-top: 1px solid #dfe2d5; padding-top: 16px; margin-bottom: 24px; }
 .price-breakdown div { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 10px; font-size: .85rem; }
 .price-breakdown dd { margin: 0; font-variant-numeric: tabular-nums; }
+.checkout-notice { grid-column: 1 / -1; }
+.recovery { border: 1px solid #b27c34; background: #fff0d6; }
+.recovery ul { padding-left: 20px; font-size: .8rem; overflow-wrap: anywhere; }

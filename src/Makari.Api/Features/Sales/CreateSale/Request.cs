@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Makari.Api.Features.Catalog.Domain;
 using Makari.Api.Features.Sales.Domain;
 
@@ -7,6 +8,7 @@ public sealed record CreateSaleRequest(
     Guid IdempotencyKey,
     CustomerType CustomerType,
     PaymentMethod PaymentMethod,
-    IReadOnlyList<CreateSaleItemRequest> Items);
+    IReadOnlyList<CreateSaleItemRequest> Items,
+    [property: JsonRequired] decimal? ExpectedTotal = null);
 
 public sealed record CreateSaleItemRequest(Guid ProductVariantId, int Quantity);

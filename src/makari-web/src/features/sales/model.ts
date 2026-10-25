@@ -4,8 +4,8 @@ export type Variant = { id: string; name: string; sizeMl: number; price: number 
 export type Product = { id: string; name: string; category: string; variants: Variant[] }
 export type Cart = Record<string, number>
 export type Order = { customerType: CustomerType; paymentMethod: PaymentMethod; items: { productVariantId: string; quantity: number }[] }
-export type SaleRequest = Order & { idempotencyKey: string }
-export type SaleResponse = Omit<SaleRequest, 'items'> & {
+export type SaleRequest = Order & { idempotencyKey: string; expectedTotal: number }
+export type SaleResponse = Omit<SaleRequest, 'items' | 'expectedTotal'> & {
   id: string
   createdAtUtc: string
   total: number
@@ -18,9 +18,9 @@ export function makeOrder(customerType: CustomerType, paymentMethod: PaymentMeth
     .sort(([a], [b]) => a.localeCompare(b)).map(([productVariantId, quantity]) => ({ productVariantId, quantity })) }
 }
 
-export function operation(order: Order, previous?: SaleRequest): SaleRequest {
-  const { idempotencyKey: _key, ...previousOrder } = previous ?? {}
-  return JSON.stringify(order) === JSON.stringify(previousOrder) ? previous! : { ...order, idempotencyKey: crypto.randomUUID() }
+export function operation(order: Order, expectedTotal: number, previous?: SaleRequest): SaleRequest {
+  if (previous) return previous // An unresolved operation is immutable, even if the draft changes.
+  return { ...order, expectedTotal, idempotencyKey: crypto.randomUUID() }
 }
 
 export function totalCents(products: Product[], cart: Cart): number {
@@ -36,7 +36,7 @@ export function isCatalog(value: unknown): value is { products: Product[] } {
 }
 
 export function isConfirmedSale(value: unknown, request: SaleRequest): value is SaleResponse {
-  if (!record(value) || !guid(value.id) || typeof value.createdAtUtc !== 'string' || !Number.isFinite(Date.parse(value.createdAtUtc)) || typeof value.registeredBy !== 'string' || !money(value.total) || value.idempotencyKey !== request.idempotencyKey || value.customerType !== request.customerType || value.paymentMethod !== request.paymentMethod || !Array.isArray(value.items) || value.items.length !== request.items.length) return false
+  if (!record(value) || !guid(value.id) || typeof value.createdAtUtc !== 'string' || !Number.isFinite(Date.parse(value.createdAtUtc)) || typeof value.registeredBy !== 'string' || !money(value.total) || Math.round(value.total * 100) !== Math.round(request.expectedTotal * 100) || value.idempotencyKey !== request.idempotencyKey || value.customerType !== request.customerType || value.paymentMethod !== request.paymentMethod || !Array.isArray(value.items) || value.items.length !== request.items.length) return false
   const items = value.items
   return request.items.every(expected => items.filter(item => record(item) && guid(item.id) && item.productVariantId === expected.productVariantId && item.quantity === expected.quantity && money(item.unitPrice) && money(item.subtotal) && Math.round(item.subtotal * 100) === Math.round(item.unitPrice * 100) * expected.quantity).length === 1)
     && Math.round(value.total * 100) === items.reduce((sum, item) => sum + Math.round(item.subtotal * 100), 0)

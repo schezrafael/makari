@@ -184,6 +184,32 @@ namespace Makari.Api.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Makari.Api.Features.Sales.Persistence.RejectedSaleAttempt", b =>
+                {
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("CurrentTotal")
+                        .HasPrecision(28, 2)
+                        .HasColumnType("numeric(28,2)");
+
+                    b.Property<decimal>("ExpectedTotal")
+                        .HasPrecision(28, 2)
+                        .HasColumnType("numeric(28,2)");
+
+                    b.Property<string>("RequestFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ValidationErrorsJson")
+                        .HasColumnType("text");
+
+                    b.HasKey("IdempotencyKey");
+
+                    b.ToTable("RejectedSaleAttempts", (string)null);
+                });
+
             modelBuilder.Entity("Makari.Api.Features.Catalog.Domain.ProductPrice", b =>
                 {
                     b.HasOne("Makari.Api.Features.Catalog.Domain.ProductVariant", "ProductVariant")

@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using Makari.Api.Features.Sales.Persistence;
 using Makari.Api.Features.Catalog.Domain;
 using Makari.Api.Features.Sales.Domain;
 using Makari.Api.Infrastructure.Persistence;
@@ -17,8 +19,43 @@ public sealed class CreateSaleHandler(MakariDbContext context, IConfiguration co
         var fingerprint = CreateFingerprint(request);
         using var keyLock = await KeyedLock.AcquireAsync(request.IdempotencyKey, cancellationToken);
 
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        if (context.Database.IsNpgsql())
+        {
+            // Transaction-scoped, shared across API instances. Hash collisions only serialize unrelated keys.
+            var lockId = System.Buffers.Binary.BinaryPrimitives.ReadInt64BigEndian(
+                SHA256.HashData(request.IdempotencyKey.ToByteArray()));
+            await context.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({lockId})", cancellationToken);
+        }
+
         var prior = await FindSaleAsync(request.IdempotencyKey, cancellationToken);
-        if (prior is not null) return ResolveExisting(prior, fingerprint);
+        if (prior is not null) return ResolveExisting(prior, fingerprint, request.ExpectedTotal!.Value);
+
+        var rejected = await context.Set<RejectedSaleAttempt>().AsNoTracking()
+            .SingleOrDefaultAsync(attempt => attempt.IdempotencyKey == request.IdempotencyKey, cancellationToken);
+        if (rejected is not null)
+        {
+            if (rejected.RequestFingerprint != fingerprint || rejected.ExpectedTotal != request.ExpectedTotal)
+                return CreateSaleOutcome.ConflictResult("This idempotency key has already been resolved with different sale contents.");
+            return rejected.CurrentTotal is not null
+                ? CreateSaleOutcome.PriceChanged(rejected.CurrentTotal.Value)
+                : CreateSaleOutcome.Invalid(JsonSerializer.Deserialize<Dictionary<string, string[]>>(rejected.ValidationErrorsJson!)!);
+        }
+
+        async Task<CreateSaleOutcome> RejectAsync(CreateSaleOutcome result)
+        {
+            context.Set<RejectedSaleAttempt>().Add(new RejectedSaleAttempt
+            {
+                IdempotencyKey = request.IdempotencyKey,
+                RequestFingerprint = fingerprint,
+                ExpectedTotal = request.ExpectedTotal!.Value,
+                CurrentTotal = result.CurrentTotal,
+                ValidationErrorsJson = result.Errors is null ? null : JsonSerializer.Serialize(result.Errors)
+            });
+            await context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return result;
+        }
 
         var operatorName = configuration["Sales:RegisteredBy"] ?? "Andi";
         if (string.IsNullOrWhiteSpace(operatorName) || operatorName.Trim().Length > 100)
@@ -29,7 +66,6 @@ public sealed class CreateSaleHandler(MakariDbContext context, IConfiguration co
         var sale = new Sale(request.CustomerType, request.PaymentMethod, operatorName,
             request.IdempotencyKey, fingerprint, DateTimeOffset.UtcNow);
 
-        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         var variantIds = request.Items.Select(item => item.ProductVariantId).ToArray();
         var prices = await SalePricing.LoadAsync(context, variantIds, request.CustomerType, cancellationToken);
         var priceByVariant = prices.ToDictionary(item => item.Id, item => item.Price);
@@ -39,14 +75,17 @@ public sealed class CreateSaleHandler(MakariDbContext context, IConfiguration co
             .ToArray();
         if (unavailable.Length > 0)
         {
-            return CreateSaleOutcome.Invalid(new Dictionary<string, string[]>
+            return await RejectAsync(CreateSaleOutcome.Invalid(new Dictionary<string, string[]>
             {
                 ["items"] = [$"Variants are missing, inactive, or have no price for {request.CustomerType}: {string.Join(", ", unavailable)}."]
-            });
+            }));
         }
 
         foreach (var item in request.Items)
             sale.AddItem(item.ProductVariantId, item.Quantity, priceByVariant[item.ProductVariantId]!.Value);
+
+        if (sale.Total != request.ExpectedTotal)
+            return await RejectAsync(CreateSaleOutcome.PriceChanged(sale.Total));
 
         var uniqueConflict = false;
         context.Sales.Add(sale);
@@ -71,15 +110,15 @@ public sealed class CreateSaleHandler(MakariDbContext context, IConfiguration co
         context.ChangeTracker.Clear();
         var winner = await FindSaleAsync(request.IdempotencyKey, cancellationToken);
         if (winner is null) throw new InvalidOperationException("The idempotency key conflicted but its sale could not be read.");
-        return ResolveExisting(winner, fingerprint);
+        return ResolveExisting(winner, fingerprint, request.ExpectedTotal!.Value);
     }
 
     private Task<Sale?> FindSaleAsync(Guid idempotencyKey, CancellationToken cancellationToken) =>
         context.Sales.AsNoTracking().Include(sale => sale.Items)
             .SingleOrDefaultAsync(sale => sale.IdempotencyKey == idempotencyKey, cancellationToken);
 
-    private static CreateSaleOutcome ResolveExisting(Sale sale, string fingerprint) =>
-        sale.RequestFingerprint == fingerprint
+    private static CreateSaleOutcome ResolveExisting(Sale sale, string fingerprint, decimal expectedTotal) =>
+        sale.RequestFingerprint == fingerprint && sale.Total == expectedTotal
             ? CreateSaleOutcome.Created(ToResponse(sale), isReplay: true)
             : CreateSaleOutcome.ConflictResult("This idempotency key has already been used with different sale contents.");
 
@@ -178,13 +217,17 @@ public sealed record CreateSaleOutcome(
     CreateSaleResponse? Response,
     bool IsReplay,
     IReadOnlyDictionary<string, string[]>? Errors,
-    string? Conflict)
+    string? Conflict,
+    decimal? CurrentTotal = null)
 {
     public static CreateSaleOutcome Created(CreateSaleResponse response, bool isReplay) =>
         new(response, isReplay, null, null);
 
     public static CreateSaleOutcome Invalid(IReadOnlyDictionary<string, string[]> errors) =>
         new(null, false, errors, null);
+
+    public static CreateSaleOutcome PriceChanged(decimal total) =>
+        new(null, false, null, null, total);
 
     public static CreateSaleOutcome ConflictResult(string detail) =>
         new(null, false, null, detail);

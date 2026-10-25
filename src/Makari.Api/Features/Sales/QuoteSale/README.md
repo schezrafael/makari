@@ -47,9 +47,9 @@ de pedido, lectura de precios activos y multiplicación decimal comprobada.
 La consulta hace una única proyección SQL con `AsNoTracking`; no usa SaveChanges,
 transacciones de escritura, migraciones ni seeds. Se propaga CancellationToken.
 
-La cotización no reserva ni congela precios. CreateSale conserva su contrato y su
-idempotencia, vuelve a consultar precios al registrar y devuelve el total definitivo.
-Sus reintentos recuperan la venta original antes de consultar el catálogo.
+La cotización no reserva ni congela precios. CreateSale requiere el subtotal confirmado
+como `expectedTotal`, vuelve a consultar precios y no registra si cambió. Devuelve el
+nuevo total en un 409 terminal para esa clave; revisa la [documentación de CreateSale](../CreateSale/README.md).
 
 Las pruebas de integración usan SQLite aislado en memoria: cotización Local/Visitor,
 validaciones, ausencia de escrituras, lectura de precios actualizados, creación y

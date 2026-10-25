@@ -45,7 +45,7 @@ public sealed class QuoteSaleTests
         Assert.Equal(4, await context.ProductPrices.CountAsync());
         Assert.Empty(context.ChangeTracker.Entries());
 
-        var saleRequest = new { customerType, items, paymentMethod = "Cash", idempotencyKey = Guid.NewGuid() };
+        var saleRequest = new { customerType, items, paymentMethod = "Cash", expectedTotal = total, idempotencyKey = Guid.NewGuid() };
         using var sale = await client.PostAsJsonAsync("/api/sales", saleRequest);
         using var replay = await client.PostAsJsonAsync("/api/sales", saleRequest);
         Assert.Equal(HttpStatusCode.Created, sale.StatusCode);

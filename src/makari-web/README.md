@@ -1,4 +1,4 @@
-# Makari POS — M0.6 Local Discount Flow
+# Makari POS — M0.7 Reliable Checkout
 
 Interfaz React + TypeScript para registrar ventas desde celular, tablet o escritorio.
 Catálogo Visitor, cantidades, descuento local, resumen, efectivo/transferencia y confirmación modal.
@@ -6,7 +6,7 @@ El total estimado permanece fijo en móvil; el éxito muestra el total confirmad
 
 ## Ejecutar
 
-Desde la raíz, con PostgreSQL configurado y las migraciones InitialCatalog y AddSales
+Desde la raíz, con PostgreSQL configurado y las migraciones InitialCatalog, AddSales y AddRejectedSaleAttempts
 aplicadas explícitamente (el arranque no migra ni siembra):
 
 ```sh
@@ -39,7 +39,7 @@ No se desactiva la validación de certificados ni se configura CORS.
   Devuelve `{ customerType, subtotal, discount, total, items }` con desglose por línea;
   no crea ventas. Ver [contrato completo](../Makari.Api/Features/Sales/QuoteSale/README.md).
 - `POST /api/sales`: `{ idempotencyKey, customerType: "Local"|"Visitor",
-  paymentMethod: "Cash"|"Transfer", items: [{ productVariantId, quantity }] }`.
+  paymentMethod: "Cash"|"Transfer", expectedTotal, items: [{ productVariantId, quantity }] }`.
 - Respuesta `201` nueva / `200` repetida: `{ id, createdAtUtc, customerType,
   paymentMethod, total, registeredBy, idempotencyKey,
   items: [{ id, productVariantId, quantity, unitPrice, subtotal }] }`.
@@ -48,37 +48,62 @@ No se desactiva la validación de certificados ni se configura CORS.
 
 La API es la autoridad de precios. El cliente calcula el estimado en centavos y valida
 que la respuesta corresponda a la clave, cliente, pago, variantes y cantidades enviadas.
-Un precio actualizado por la API se acepta y se muestra como total confirmado.
+Una diferencia de importe produce 409 sin venta y requiere cotizar y confirmar de nuevo;
+no se acepta como éxito un total distinto del esperado.
 
-## Reintentos
+## Persistencia y recuperación
 
-Se genera una clave con `crypto.randomUUID()` al primer envío. Un fallo conserva
-carrito y clave; reintentar envía el mismo pedido. Cambiar cantidades, descuento local
-o forma de pago invalida la clave anterior. Durante el envío se bloquean los controles
-y se impiden envíos simultáneos. Solo un éxito validado vacía el carrito.
+`localStorage["makari.checkout.v1"]` contiene `{ version: 1, draft, attempt?, receipt? }`.
+El borrador guarda solo IDs de variantes, cantidades, descuento local y método de pago.
+No guarda ni restaura precios del catálogo. La restauración valida versión, UUIDs,
+cantidades, enums, importes del intento y coherencia entre borrador e intento.
+Los datos inválidos se conservan sin sobrescribir y se bloquea el checkout para revisión.
 
-Ante un fallo de red, reintentar sin editar y sin volver a cobrar. La venta puede haberse
-guardado aunque la respuesta no haya llegado. El estado se conserva en memoria: recargar,
-cerrar la pestaña o navegar lo pierde. No hay recuperación entre sesiones ni modo offline.
+Se reconcilia el borrador con el catálogo actual: las variantes ausentes no se eliminan
+silenciosamente; bloquean un nuevo registro y el operador puede quitarlas explícitamente.
+Un intento ya enviado nunca se modifica por cambios del catálogo. Se puede recuperar
+incluso si el catálogo falla o ya no contiene esas variantes.
 
-## Descuento local
+La solicitud exacta, `expectedTotal` e IdempotencyKey se guardan y verifican antes del
+fetch. Timeout, desconexión, 5xx o respuesta ambigua conservan el intento y bloquean la
+edición. «Recuperar venta» reenvía exactamente ese request sin generar una clave nueva.
+Recargar o cerrar la pestaña no lo pierde. No existe un botón para descartar un intento
+incierto. Un conflicto de idempotencia requiere revisar la clave con el administrador.
 
-Las tarjetas y líneas del carrito muestran los precios Visitor como base. El pedido
-empieza sin descuento y se registra como Visitor. Activar «Descuento local» consulta
-la cotización Local; muestra subtotal Visitor, descuento monetario y total Local.
-Desactivarlo recupera inmediatamente el estimado Visitor y registra como Visitor.
-Después de una venta exitosa se vacía el carrito y se desactiva el descuento.
+Un rechazo definitivo reconocido (`price_changed` o `sale_validation_failed`, misma clave)
+libera el intento pero conserva el borrador. Un precio actualizado se muestra como aviso,
+se vuelve a cotizar y se exige otra confirmación. La nueva clave se genera al confirmar.
+Solo una respuesta de venta validada sustituye atómicamente borrador/intento por un
+comprobante con folio y total. Si ese guardado falla, se mantiene la recuperación.
+El comprobante permanece tras recargar hasta editar el siguiente pedido.
 
-Cada cambio de cantidades invalida la cotización. La clave del pedido, la cancelación
-de solicitudes y la comprobación del cuerpo evitan aplicar respuestas obsoletas.
-Mientras la cotización Local esté pendiente o fallida, no se muestra un total cobrable
-y se deshabilitan registro y confirmación. Hay reintento explícito de cotización.
-Cambiar solo el método de pago no requiere cotizar de nuevo.
+Web Locks mantiene un único editor por origen entre pestañas. Las demás esperan y leen
+el estado actualizado al obtener el bloqueo. Se requiere HTTPS confiable o localhost,
+Web Locks, localStorage habilitado y espacio disponible; no se envía una venta sin
+persistir antes su solicitud. Cerrar la pestaña libera el bloqueo del navegador.
 
-El servidor calcula el descuento a partir de precios vigentes, sin porcentajes ni
-importes enviados por el cliente. La cotización no congela precios: CreateSale vuelve
-a validarlos y su total es el definitivo. Si cambian entre cotizar y registrar, el
-operador debe conciliar el importe recibido con el total confirmado.
+## Importes y descuento local
+
+Visitor es el tipo por defecto; el control de descuento cambia a Local. Ambos modos
+se cotizan en el servidor antes de habilitar el registro. Cambiar productos, cantidades,
+descuento o pago invalida la cotización visible. Se cancelan solicitudes anteriores y
+se descartan respuestas que no correspondan al pedido actual.
+
+El modal muestra el total a confirmar. CreateSale recibe ese importe como `expectedTotal`:
+si cambió, no registra la venta y devuelve un rechazo definitivo con el importe actualizado.
+El éxito muestra el folio y el total confirmado por CreateSale. Nunca se envían precios
+por línea ni porcentajes de descuento.
+
+## Límites operativos
+
+La recuperación pertenece al mismo navegador y origen (protocolo, host y puerto).
+Borrar datos del navegador, cambiar de dispositivo/origen, manipular localStorage o perder
+el perfil puede eliminar la clave; localStorage no es un respaldo externo ni un registro
+contable. No hay sincronización entre dispositivos ni recuperación administrativa automática.
+No se deben editar manualmente datos de un intento para desbloquearlo.
+
+La migración del backend debe aplicarse explícitamente antes de usar este frontend;
+ver [CreateSale M0.7](../Makari.Api/Features/Sales/CreateSale/README.md). No se aplicó en esta tarea.
 
 ## Verificación
 
@@ -94,7 +119,7 @@ Las pruebas usan el runner de Node 24, sin dependencias nuevas. Cubren contratos
 carrito vacío, cambios de cliente/pago/cantidad, claves de reintento, respuestas ambiguas,
 precio confirmado y errores HTTP. No son pruebas de renderizado de componentes.
 
-Comprobación M0.6: catálogo sin parámetros, Visitor sin descuento, activar/desactivar
+Comprobación histórica M0.6: catálogo sin parámetros, Visitor sin descuento, activar/desactivar
 descuento, cambiar cantidades, confirmación Local y error de cotización con API detenida.
 La creación exitosa Local/Visitor y reintento sin duplicación se prueban en integración
 sobre SQLite aislado; no se crean nuevas ventas en PostgreSQL durante esta verificación.
@@ -114,3 +139,13 @@ validación de cotizaciones y conservación de claves. No hay pruebas DOM automa
   Es un registro de prueba, sin cobro real; se conserva en la base local.
 - La pérdida de red durante POST y el reintento no se simularon manualmente;
   la clave estable y el rechazo de respuestas ambiguas tienen pruebas automatizadas.
+
+## Resultado M0.7
+
+- API: build correcto, 112 pruebas .NET aprobadas, incluidas las suites previas.
+- Frontend: build y lint correctos; 22 pruebas Node aprobadas.
+- Chrome aislado en origen/servidor simulados: recarga de borrador Local/Transfer,
+  corte de respuesta, bloqueo, recarga de intento con la misma clave, reintento exitoso
+  con folio y total, y HTTP 409 por precio actualizado seguido de nueva cotización.
+- El simulador no modifica PostgreSQL. La migración fue generada y validada con el
+  snapshot; sigue sin aplicar. Ver [pruebas PostgreSQL pendientes](../Makari.Api/Features/Sales/CreateSale/README.md).
