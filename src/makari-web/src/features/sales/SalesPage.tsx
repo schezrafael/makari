@@ -142,7 +142,6 @@ export default function SalesPage() {
   }
 
   return <>
-    <header className="header"><a href="/" className="brand" aria-label="Makari Drinks inicio">makari<span>DRINKS · ZIPOLITE</span></a><span className="header-label">Punto de venta <span className="dot" /></span></header>
     <main className="layout">
       {(!ready || storageError) && <div className="notice error checkout-notice" role="alert">{storageError || 'Esperando acceso al checkout. Cierra otras pestañas de Makari para continuar.'}</div>}
       <section className="catalog" aria-labelledby="page-title">

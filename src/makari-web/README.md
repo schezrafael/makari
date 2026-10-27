@@ -1,5 +1,11 @@
 # Makari POS — M0.7 Reliable Checkout
 
+La navegación principal permite alternar entre Nueva venta y Ventas del día. El resumen
+consulta `GET /api/sales/summary` sin fecha al abrir (fecha comercial del backend) y usa
+`?date=YYYY-MM-DD` al elegir otra fecha. Muestra ingresos, número de ventas, efectivo,
+transferencias, unidades y ventas agrupadas por variante. El detalle del contrato está en
+[GetDailySalesSummary](../Makari.Api/Features/Sales/GetDailySalesSummary/README.md).
+
 Interfaz React + TypeScript para registrar ventas desde celular, tablet o escritorio.
 Catálogo Visitor, cantidades, descuento local, resumen, efectivo/transferencia y confirmación modal.
 El total estimado permanece fijo en móvil; el éxito muestra el total confirmado por la API.

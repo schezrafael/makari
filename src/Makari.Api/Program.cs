@@ -2,6 +2,7 @@ using Makari.Api.Features.Catalog.GetCatalog;
 using Makari.Api.Features.Catalog.Persistence;
 using Makari.Api.Features.Health;
 using Makari.Api.Features.Sales.CreateSale;
+using Makari.Api.Features.Sales.GetDailySalesSummary;
 using Makari.Api.Features.Sales.QuoteSale;
 using Makari.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -16,11 +17,9 @@ builder.Services.AddDbContext<MakariDbContext>(options =>
 builder.Services.AddScoped<GetCatalogHandler>();
 builder.Services.AddScoped<CreateSaleHandler>();
 builder.Services.AddScoped<QuoteSaleHandler>();
+builder.Services.AddScoped<GetDailySalesSummaryHandler>();
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false)));
-
-// Features
-builder.Services.AddScoped<GetCatalogHandler>();
 
 // OpenAPI
 builder.Services.AddOpenApi();
@@ -48,6 +47,7 @@ app.MapHealthEndpoint();
 app.MapGetCatalogEndpoint();
 app.MapCreateSaleEndpoint();
 app.MapQuoteSaleEndpoint();
+app.MapGetDailySalesSummaryEndpoint();
 app.Run();
 
 // Allows the integration tests to start the application in memory.
