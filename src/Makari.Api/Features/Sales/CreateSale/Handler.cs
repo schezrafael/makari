@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Makari.Api.Features.CashCloses.Domain;
 using Makari.Api.Features.Sales.Persistence;
 using Makari.Api.Features.Catalog.Domain;
 using Makari.Api.Features.Sales.Domain;
@@ -13,6 +14,9 @@ namespace Makari.Api.Features.Sales.CreateSale;
 
 public sealed class CreateSaleHandler(MakariDbContext context, IConfiguration configuration)
 {
+    private readonly TimeZoneInfo _businessZone = TimeZoneInfo.FindSystemTimeZoneById(
+        configuration["Business:TimeZoneId"] ?? "America/Mexico_City");
+
     public async Task<CreateSaleOutcome> HandleAsync(
         CreateSaleRequest request, CancellationToken cancellationToken = default)
     {
@@ -20,13 +24,7 @@ public sealed class CreateSaleHandler(MakariDbContext context, IConfiguration co
         using var keyLock = await KeyedLock.AcquireAsync(request.IdempotencyKey, cancellationToken);
 
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
-        if (context.Database.IsNpgsql())
-        {
-            // Transaction-scoped, shared across API instances. Hash collisions only serialize unrelated keys.
-            var lockId = System.Buffers.Binary.BinaryPrimitives.ReadInt64BigEndian(
-                SHA256.HashData(request.IdempotencyKey.ToByteArray()));
-            await context.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({lockId})", cancellationToken);
-        }
+        await TransactionAdvisoryLocks.AcquireSaleIdempotencyKeyAsync(context, request.IdempotencyKey, cancellationToken);
 
         var prior = await FindSaleAsync(request.IdempotencyKey, cancellationToken);
         if (prior is not null) return ResolveExisting(prior, fingerprint, request.ExpectedTotal!.Value);
@@ -37,9 +35,30 @@ public sealed class CreateSaleHandler(MakariDbContext context, IConfiguration co
         {
             if (rejected.RequestFingerprint != fingerprint || rejected.ExpectedTotal != request.ExpectedTotal)
                 return CreateSaleOutcome.ConflictResult("This idempotency key has already been resolved with different sale contents.");
+            if (rejected.ConflictCode == "daily_cash_closed" && rejected.ConflictBusinessDate is not null)
+                return CreateSaleOutcome.CashClosed(rejected.ConflictBusinessDate.Value);
             return rejected.CurrentTotal is not null
                 ? CreateSaleOutcome.PriceChanged(rejected.CurrentTotal.Value)
                 : CreateSaleOutcome.Invalid(JsonSerializer.Deserialize<Dictionary<string, string[]>>(rejected.ValidationErrorsJson!)!);
+        }
+
+        var createdAtUtc = DateTimeOffset.UtcNow;
+        var businessDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(createdAtUtc, _businessZone).DateTime);
+        await TransactionAdvisoryLocks.AcquireBusinessDateAsync(context, businessDate, cancellationToken);
+        if (await context.DailyCashCloses.AsNoTracking()
+                .AnyAsync(close => close.BusinessDate == businessDate, cancellationToken))
+        {
+            context.Set<RejectedSaleAttempt>().Add(new RejectedSaleAttempt
+            {
+                IdempotencyKey = request.IdempotencyKey,
+                RequestFingerprint = fingerprint,
+                ExpectedTotal = request.ExpectedTotal!.Value,
+                ConflictCode = "daily_cash_closed",
+                ConflictBusinessDate = businessDate
+            });
+            await context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return CreateSaleOutcome.CashClosed(businessDate);
         }
 
         async Task<CreateSaleOutcome> RejectAsync(CreateSaleOutcome result)
@@ -64,7 +83,7 @@ public sealed class CreateSaleHandler(MakariDbContext context, IConfiguration co
         }
 
         var sale = new Sale(request.CustomerType, request.PaymentMethod, operatorName,
-            request.IdempotencyKey, fingerprint, DateTimeOffset.UtcNow);
+            request.IdempotencyKey, fingerprint, createdAtUtc);
 
         var variantIds = request.Items.Select(item => item.ProductVariantId).ToArray();
         var prices = await SalePricing.LoadAsync(context, variantIds, request.CustomerType, cancellationToken);
@@ -218,7 +237,9 @@ public sealed record CreateSaleOutcome(
     bool IsReplay,
     IReadOnlyDictionary<string, string[]>? Errors,
     string? Conflict,
-    decimal? CurrentTotal = null)
+    decimal? CurrentTotal = null,
+    string? ConflictCode = null,
+    DateOnly? ConflictBusinessDate = null)
 {
     public static CreateSaleOutcome Created(CreateSaleResponse response, bool isReplay) =>
         new(response, isReplay, null, null);
@@ -231,4 +252,8 @@ public sealed record CreateSaleOutcome(
 
     public static CreateSaleOutcome ConflictResult(string detail) =>
         new(null, false, null, detail);
+
+    public static CreateSaleOutcome CashClosed(DateOnly businessDate) =>
+        new(null, false, null, "The business date is already closed. No sale was created.", null,
+            "daily_cash_closed", businessDate);
 }

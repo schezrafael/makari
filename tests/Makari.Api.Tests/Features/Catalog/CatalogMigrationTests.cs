@@ -12,10 +12,29 @@ public sealed class CatalogMigrationTests
     {
         using var context = new MakariDbContext(new DbContextOptionsBuilder<MakariDbContext>()
             .UseNpgsql("Host=localhost;Database=makari_migration_unit_tests").Options);
-        Assert.EndsWith("_AddRejectedSaleAttempts", context.Database.GetMigrations().Last());
+        Assert.Contains(context.Database.GetMigrations(), migration => migration.EndsWith("_AddRejectedSaleAttempts"));
         Assert.False(context.Database.HasPendingModelChanges());
         var sql = context.GetService<IMigrator>().GenerateScript("20261020220102_AddSales");
         Assert.Contains("CREATE TABLE \"RejectedSaleAttempts\"", sql);
+        Assert.DoesNotContain("UPDATE \"ProductPrices\"", sql);
+        Assert.DoesNotContain("INSERT INTO \"Sales\"", sql);
+    }
+
+    [Fact]
+    public void DailyCashCloses_MigrationAddsImmutableSnapshotSchemaOnly()
+    {
+        using var context = new MakariDbContext(new DbContextOptionsBuilder<MakariDbContext>()
+            .UseNpgsql("Host=localhost;Database=makari_migration_unit_tests").Options);
+        Assert.EndsWith("_AddDailyCashCloses", context.Database.GetMigrations().Last());
+        Assert.False(context.Database.HasPendingModelChanges());
+
+        var sql = context.GetService<IMigrator>().GenerateScript(
+            "20261024021902_AddRejectedSaleAttempts", "20261027035313_AddDailyCashCloses");
+        Assert.Contains("CREATE TABLE \"DailyCashCloses\"", sql);
+        Assert.Contains("CREATE UNIQUE INDEX \"IX_DailyCashCloses_BusinessDate\"", sql);
+        Assert.Contains("CREATE UNIQUE INDEX \"IX_DailyCashCloses_IdempotencyKey\"", sql);
+        Assert.Contains("ADD \"ConflictBusinessDate\" date", sql);
+        Assert.Contains("ADD \"ConflictCode\" character varying(64)", sql);
         Assert.DoesNotContain("UPDATE \"ProductPrices\"", sql);
         Assert.DoesNotContain("INSERT INTO \"Sales\"", sql);
     }

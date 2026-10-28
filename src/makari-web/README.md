@@ -1,4 +1,8 @@
-# Makari POS — M0.7 Reliable Checkout
+# Makari POS — M0.9 Daily Cash Close
+
+La navegación permite abrir Nueva venta, Ventas del día y Cierre de caja. El cierre muestra
+los totales del servidor, calcula efectivo esperado y diferencia, y conserva un comprobante
+inmutable después de confirmarlo.
 
 La navegación principal permite alternar entre Nueva venta y Ventas del día. El resumen
 consulta `GET /api/sales/summary` sin fecha al abrir (fecha comercial del backend) y usa
@@ -12,8 +16,9 @@ El total estimado permanece fijo en móvil; el éxito muestra el total confirmad
 
 ## Ejecutar
 
-Desde la raíz, con PostgreSQL configurado y las migraciones InitialCatalog, AddSales y AddRejectedSaleAttempts
-aplicadas explícitamente (el arranque no migra ni siembra):
+Desde la raíz, con PostgreSQL configurado y las migraciones InitialCatalog, AddSales,
+AddRejectedSaleAttempts y AddDailyCashCloses aplicadas explícitamente (el arranque no
+migra ni siembra). M0.9 requiere la última migración antes de desplegar los nuevos nodos API.
 
 ```sh
 dotnet run --project src/Makari.Api --launch-profile http
@@ -41,6 +46,9 @@ No se desactiva la validación de certificados ni se configura CORS.
 
 - `GET /api/catalog` (sin parámetros; precios Visitor): `{ products: [{ id, name, category,
   variants: [{ id, name, sizeMl, price }] }] }`.
+- `GET /api/sales/summary?date=YYYY-MM-DD` (fecha opcional; si se omite, usa la fecha local
+  del negocio). Devuelve ventas, importes por método de pago, unidades y agrupación histórica
+  por variante; ver [contrato](../Makari.Api/Features/Sales/GetDailySalesSummary/README.md).
 - `POST /api/sales/quote`: `{ customerType: "Local"|"Visitor", items: [{ productVariantId, quantity }] }`.
   Devuelve `{ customerType, subtotal, discount, total, items }` con desglose por línea;
   no crea ventas. Ver [contrato completo](../Makari.Api/Features/Sales/QuoteSale/README.md).
@@ -51,6 +59,11 @@ No se desactiva la validación de certificados ni se configura CORS.
   items: [{ id, productVariantId, quantity, unitPrice, subtotal }] }`.
 - `400`: validación ProblemDetails; `409`: conflicto de clave. Otros errores,
   timeout, JSON inválido o respuesta incompatible nunca se consideran éxito.
+- `POST /api/cash-closes`: `{ idempotencyKey, businessDate, openingCash, countedCash,
+  responsible, observations }`. Totales del cierre se calculan desde ventas persistidas;
+  ver [contrato](../Makari.Api/Features/CashCloses/README.md).
+- `GET /api/cash-closes?date=YYYY-MM-DD`: obtiene un cierre por fecha (404 si aún está abierta).
+- `GET /api/cash-closes/{id}`: obtiene el comprobante por folio.
 
 La API es la autoridad de precios. El cliente calcula el estimado en centavos y valida
 que la respuesta corresponda a la clave, cliente, pago, variantes y cantidades enviadas.
@@ -87,6 +100,15 @@ Web Locks mantiene un único editor por origen entre pestañas. Las demás esper
 el estado actualizado al obtener el bloqueo. Se requiere HTTPS confiable o localhost,
 Web Locks, localStorage habilitado y espacio disponible; no se envía una venta sin
 persistir antes su solicitud. Cerrar la pestaña libera el bloqueo del navegador.
+
+El cierre usa `localStorage["makari.cash-close.v1"]` con esquema versionado. Guarda el
+request exacto y su IdempotencyKey antes del POST; un resultado incierto conserva ambos y
+bloquea la edición. Solo un comprobante de API validado elimina el intento. Al recuperar la
+página se consulta el servidor por fecha y se muestra el cierre ya confirmado si existe.
+
+La fecha operativa usa `Business:TimeZoneId`; la UI y la API impiden cerrar fechas futuras.
+El efectivo esperado es fondo inicial más ventas Cash. Transferencias quedan fuera del
+efectivo físico. La diferencia puede ser positiva o negativa y el cierre no se puede editar.
 
 ## Importes y descuento local
 

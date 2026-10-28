@@ -1,5 +1,8 @@
 using Makari.Api.Features.Catalog.GetCatalog;
 using Makari.Api.Features.Catalog.Persistence;
+using Makari.Api.Features.CashCloses.CreateDailyCashClose;
+using Makari.Api.Features.CashCloses.GetDailyCashClose;
+using Makari.Api.Features.CashCloses.GetDailyCashCloseById;
 using Makari.Api.Features.Health;
 using Makari.Api.Features.Sales.CreateSale;
 using Makari.Api.Features.Sales.GetDailySalesSummary;
@@ -18,6 +21,9 @@ builder.Services.AddScoped<GetCatalogHandler>();
 builder.Services.AddScoped<CreateSaleHandler>();
 builder.Services.AddScoped<QuoteSaleHandler>();
 builder.Services.AddScoped<GetDailySalesSummaryHandler>();
+builder.Services.AddScoped<CreateDailyCashCloseHandler>();
+builder.Services.AddScoped<GetDailyCashCloseHandler>();
+builder.Services.AddScoped<GetDailyCashCloseByIdHandler>();
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false)));
 
@@ -48,6 +54,9 @@ app.MapGetCatalogEndpoint();
 app.MapCreateSaleEndpoint();
 app.MapQuoteSaleEndpoint();
 app.MapGetDailySalesSummaryEndpoint();
+app.MapCreateDailyCashCloseEndpoint();
+app.MapGetDailyCashCloseEndpoint();
+app.MapGetDailyCashCloseByIdEndpoint();
 app.Run();
 
 // Allows the integration tests to start the application in memory.

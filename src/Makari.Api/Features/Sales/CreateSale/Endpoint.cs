@@ -11,7 +11,7 @@ public static class CreateSaleEndpoint
             .WithName("CreateSale")
             .WithTags("Sales")
             .WithSummary("Create a sale")
-            .WithDescription("Creates a sale only when expectedTotal matches current catalog prices. Replays return the original sale. HTTP 409 distinguishes price_changed from idempotency_conflict.");
+            .WithDescription("Creates a sale only when expectedTotal matches current catalog prices and the business date is open. Replays return the original sale. HTTP 409 distinguishes price_changed, idempotency_conflict, and daily_cash_closed.");
         return endpoints;
     }
 
@@ -43,13 +43,17 @@ public static class CreateSaleEndpoint
             });
         if (result.Conflict is not null)
         {
-            return TypedResults.Conflict(new ProblemDetails
+            var code = result.ConflictCode ?? "idempotency_conflict";
+            var problem = new ProblemDetails
             {
                 Status = StatusCodes.Status409Conflict,
-                Title = "Idempotency key conflict",
+                Title = code == "daily_cash_closed" ? "Business date is closed" : "Idempotency key conflict",
                 Detail = result.Conflict,
-                Extensions = { ["code"] = "idempotency_conflict", ["idempotencyKey"] = request!.IdempotencyKey }
-            });
+                Extensions = { ["code"] = code, ["idempotencyKey"] = request!.IdempotencyKey }
+            };
+            if (result.ConflictBusinessDate is not null)
+                problem.Extensions["businessDate"] = result.ConflictBusinessDate.Value;
+            return TypedResults.Conflict(problem);
         }
         return result.IsReplay
             ? TypedResults.Ok(result.Response!)

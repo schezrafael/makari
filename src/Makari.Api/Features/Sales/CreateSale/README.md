@@ -29,6 +29,9 @@ sigue proporcionando el operador; por defecto es Andi.
   solicita nueva confirmación y solo entonces usa una clave nueva.
 - 409 `code: "idempotency_conflict"`, `idempotencyKey`: la clave se resolvió con otro
   contenido o importe esperado. No se debe cambiar automáticamente de clave.
+- 409 `code: "daily_cash_closed"`, `businessDate`: la solicitud quedó rechazada para la
+  fecha operativa cerrada. El rechazo se persiste, por lo que la misma clave repite el
+  conflicto. Una venta ya confirmada se busca antes de esta regla y conserva su replay.
 - 400 `code: "sale_validation_failed"`, `idempotencyKey`, `errors`: rechazo de negocio
   definitivo (por ejemplo, variante inactiva). Se conserva el borrador para corregirlo.
 - 400 de binding o `code: "request_validation_failed"`: solicitud mal formada. No prueba
@@ -47,8 +50,14 @@ que la clave de la respuesta sea la del intento pendiente.
    catálogo haya cambiado o el producto se haya desactivado.
 4. Buscar rechazo definitivo en `RejectedSaleAttempts`. Repetir el rechazo original para
    contenido idéntico; otro contenido/expectedTotal produce conflicto de idempotencia.
-5. Consultar precios actuales y validar variantes. Guardar el rechazo definitivo o la
-   venta e items dentro de la transacción, antes de responder.
+5. Tomar el advisory lock exclusivo por fecha operativa compartido con DailyCashClose.
+   Si ya existe un cierre, persistir el rechazo `daily_cash_closed`; si no, consultar
+   precios y guardar rechazo o venta e items antes de responder.
+
+El cierre y toda venta nueva serializan usando el mismo advisory lock transaccional de
+fecha. Si la venta obtiene el lock primero, el cierre incluye su registro ya confirmado;
+si el cierre gana, la venta se rechaza. Las búsquedas de venta existente y rechazo por
+clave preceden el lock de fecha, preservando la recuperación de comprobantes.
 
 El fingerprint conserva el formato histórico (cliente, pago, variantes y cantidades
 ordenadas). No depende de precios actuales. Para ventas aceptadas, el total persistido

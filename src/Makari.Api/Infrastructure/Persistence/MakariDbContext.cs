@@ -1,4 +1,5 @@
 using Makari.Api.Features.Catalog.Domain;
+using Makari.Api.Features.CashCloses.Domain;
 using Makari.Api.Features.Sales.Domain;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,6 +13,7 @@ public sealed class MakariDbContext(DbContextOptions<MakariDbContext> options)
     public DbSet<ProductPrice> ProductPrices => Set<ProductPrice>();
     public DbSet<Sale> Sales => Set<Sale>();
     public DbSet<SaleItem> SaleItems => Set<SaleItem>();
+    public DbSet<DailyCashClose> DailyCashCloses => Set<DailyCashClose>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

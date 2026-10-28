@@ -22,6 +22,83 @@ namespace Makari.Api.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Makari.Api.Features.CashCloses.Domain.DailyCashClose", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("BusinessDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("CashSales")
+                        .HasPrecision(28, 2)
+                        .HasColumnType("numeric(28,2)");
+
+                    b.Property<DateTimeOffset>("ClosedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("CountedCash")
+                        .HasPrecision(28, 2)
+                        .HasColumnType("numeric(28,2)");
+
+                    b.Property<decimal>("Difference")
+                        .HasPrecision(28, 2)
+                        .HasColumnType("numeric(28,2)");
+
+                    b.Property<decimal>("ExpectedCash")
+                        .HasPrecision(28, 2)
+                        .HasColumnType("numeric(28,2)");
+
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Observations")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<decimal>("OpeningCash")
+                        .HasPrecision(28, 2)
+                        .HasColumnType("numeric(28,2)");
+
+                    b.Property<string>("RequestFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Responsible")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("SalesCount")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("TotalRevenue")
+                        .HasPrecision(28, 2)
+                        .HasColumnType("numeric(28,2)");
+
+                    b.Property<decimal>("TransferSales")
+                        .HasPrecision(28, 2)
+                        .HasColumnType("numeric(28,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BusinessDate")
+                        .IsUnique();
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique();
+
+                    b.ToTable("DailyCashCloses", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_DailyCashCloses_CountedCash_NonNegative", "\"CountedCash\" >= 0");
+
+                            t.HasCheckConstraint("CK_DailyCashCloses_OpeningCash_NonNegative", "\"OpeningCash\" >= 0");
+
+                            t.HasCheckConstraint("CK_DailyCashCloses_SalesCount_NonNegative", "\"SalesCount\" >= 0");
+                        });
+                });
+
             modelBuilder.Entity("Makari.Api.Features.Catalog.Domain.Product", b =>
                 {
                     b.Property<Guid>("Id")
@@ -188,6 +265,13 @@ namespace Makari.Api.Infrastructure.Persistence.Migrations
                 {
                     b.Property<Guid>("IdempotencyKey")
                         .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("ConflictBusinessDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("ConflictCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<decimal?>("CurrentTotal")
                         .HasPrecision(28, 2)

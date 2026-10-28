@@ -100,6 +100,11 @@ export async function resolveAttempt(storage: CheckoutStorage, state: Checkout):
     }
     if (response.status === 409 && body.code === 'idempotency_conflict')
       throw new Error('Conflicto de idempotencia: se requiere revisar esta clave con el administrador. No inicies otra operación.')
+    if (response.status === 409 && body.code === 'daily_cash_closed' && typeof body.businessDate === 'string') {
+      const next: Checkout = { version: 1, draft: state.draft }
+      saveCheckout(storage, next)
+      return { state: next, message: `La fecha operativa ${body.businessDate} ya está cerrada. No se registró esta venta.` }
+    }
   }
   throw new Error(`Resultado no confirmado (${response.status}). Reintenta la misma operación; no vuelvas a cobrar.`)
 }
