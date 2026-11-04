@@ -1,3 +1,4 @@
+import { StatusMessage, PageHeader, MetricCard, MoneyDisplay } from '../../components/ui'
 import { useEffect, useState } from 'react'
 import { fetchDailySummary } from './dailySummary'
 import type { DailySummary } from './dailySummary'
@@ -24,13 +25,13 @@ export default function DailySalesPage() {
   }, [date, reload])
 
   return <main className="summary-layout">
-    <div className="summary-heading"><div><p className="eyebrow">MAKARI DRINKS · ZIPOLITE</p><h1>Ventas del día</h1><p>Resumen de ventas registradas en la fecha local del negocio.</p></div><label className="summary-date">Fecha<input type="date" value={date || summary?.date || ''} onChange={event => { setDate(event.target.value); setLoading(true); setError('') }} aria-label="Fecha del resumen" /></label></div>
-    {loading ? <p role="status" className="notice">Cargando resumen…</p> : error ? <div className="notice error summary-error" role="alert"><p>{error}</p><button onClick={() => { setLoading(true); setError(''); setReload(value => value + 1) }}>Reintentar</button></div> : summary && <>
+    <PageHeader title="Ventas del día" description="Resumen de ventas registradas en la fecha local del negocio."><label className="summary-date">Fecha<input type="date" value={date || summary?.date || ''} onChange={event => { setDate(event.target.value); setLoading(true); setError('') }} aria-label="Fecha del resumen" /></label></PageHeader>
+    {loading ? <StatusMessage>Cargando resumen…</StatusMessage> : error ? <div className="notice error summary-error" role="alert"><p>{error}</p><button onClick={() => { setLoading(true); setError(''); setReload(value => value + 1) }}>Reintentar</button></div> : summary && <>
       <section className="summary-cards" aria-label="Totales del día">
-        <article className="summary-card"><span>Total vendido</span><strong>{currency(summary.totalRevenue)}</strong></article>
-        <article className="summary-card"><span>Ventas</span><strong>{summary.salesCount}</strong></article>
-        <article className="summary-card"><span>Efectivo</span><strong>{currency(summary.cashRevenue)}</strong></article>
-        <article className="summary-card"><span>Transferencias</span><strong>{currency(summary.transferRevenue)}</strong></article>
+        <MetricCard label="Total vendido"><MoneyDisplay value={summary.totalRevenue} /></MetricCard>
+        <MetricCard label="Ventas registradas">{summary.salesCount}</MetricCard>
+        <MetricCard label="Efectivo"><MoneyDisplay value={summary.cashRevenue} /></MetricCard>
+        <MetricCard label="Transferencias"><MoneyDisplay value={summary.transferRevenue} /></MetricCard>
       </section>
       <section className="summary-variants" aria-labelledby="variants-title"><h2 id="variants-title">Bebidas vendidas <span className="badge">{summary.unitsSold} unidades</span></h2>
         {summary.variants.length === 0 ? <div className="summary-empty"><span aria-hidden="true">✳</span><p>No hay ventas registradas para esta fecha.</p></div> : <ul>{summary.variants.map(variant => <li key={variant.productVariantId}><div><strong>{variant.productName} · {variant.variantName}</strong><span>{variant.quantity} {variant.quantity === 1 ? 'unidad' : 'unidades'}</span></div><strong>{currency(variant.revenue)}</strong></li>)}</ul>}

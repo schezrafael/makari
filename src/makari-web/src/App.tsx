@@ -2,11 +2,11 @@ import SalesPage from './features/sales/SalesPage'
 import DailySalesPage from './features/sales/DailySalesPage'
 import CashClosePage from './features/cash-closes/CashClosePage'
 import { useState } from 'react'
+import { AppShell } from './components/AppShell'
 
 export default function App() {
   const [page, setPage] = useState<'sale' | 'summary' | 'close'>('sale')
-  return <>
-    <header className="header"><a href="/" className="brand" aria-label="Makari Drinks inicio">makari<span>DRINKS · ZIPOLITE</span></a><nav className="main-nav" aria-label="Secciones"><button aria-current={page === 'sale' ? 'page' : undefined} onClick={() => setPage('sale')}>Nueva venta</button><button aria-current={page === 'summary' ? 'page' : undefined} onClick={() => setPage('summary')}>Ventas del día</button><button aria-current={page === 'close' ? 'page' : undefined} onClick={() => setPage('close')}>Cierre de caja</button></nav></header>
+  return <AppShell page={page} onNavigate={setPage}>
     {page === 'sale' ? <SalesPage /> : page === 'summary' ? <DailySalesPage /> : <CashClosePage />}
-  </>
+  </AppShell>
 }
