@@ -12,13 +12,17 @@ export default function CashClosePage() {
     try { return { state: restoreCashClose(localStorage), ready: true, error: '' } }
     catch (cause) { return { state: emptyCashClose(), ready: false, error: cause instanceof Error ? cause.message : 'No se pudo recuperar el borrador del cierre.' } }
   })
+  // Persist draft + pending request/receipt atomically for interruption recovery.
   const [state, setState] = useState<CashCloseState>(restored.state)
   const stateRef = useRef(state)
   const commitState = useCallback((next: CashCloseState) => { stateRef.current = next; setState(next) }, [])
   const [ready] = useState(restored.ready)
-  const [summary, setSummary] = useState<DailySummary | null>(null)
+  // Remote data is published together only after both queries succeed.
+  const [remote, setRemote] = useState<{ summary: DailySummary; existing: CashClose | null } | null>(null)
+  const summary = remote?.summary ?? null
+  const existing = remote?.existing ?? null
   const [businessToday, setBusinessToday] = useState('')
-  const [existing, setExisting] = useState<CashClose | null>(null)
+  // Request/UI state is independent of remote data and editable draft fields.
   const [loading, setLoading] = useState(restored.ready)
   const [error, setError] = useState(restored.error)
   const [success, setSuccess] = useState('')
@@ -27,46 +31,50 @@ export default function CashClosePage() {
   const inFlight = useRef(false)
   const dialog = useRef<HTMLDialogElement>(null)
 
-  const businessDate = state.draft.businessDate
+  // Selecting a date triggers loading; editing the persisted draft never does.
+  const [businessDate, setBusinessDate] = useState(restored.state.draft.businessDate)
   useEffect(() => {
     if (!ready) return
     const controller = new AbortController()
     void (async () => {
       try {
         const today = await fetchDailySummary(undefined, controller.signal)
-        setBusinessToday(today.date)
-        const currentState = stateRef.current
-        const daily = businessDate ? await fetchDailySummary(businessDate, controller.signal) : today
         if (controller.signal.aborted) return
-        setSummary(daily)
+        const daily = businessDate && businessDate !== today.date
+          ? await fetchDailySummary(businessDate, controller.signal) : today
+        if (controller.signal.aborted) return
+        const response = await fetch(`/api/cash-closes?date=${encodeURIComponent(daily.date)}`, { signal: controller.signal })
+        const body: unknown = await response.json()
+        if (controller.signal.aborted) return
+        const notFound = response.status === 404 && typeof body === 'object' && body !== null
+          && 'code' in body && body.code === 'cash_close_not_found'
+        if (!notFound && !response.ok) throw new Error(`No se pudo consultar el cierre (${response.status}).`)
+        if (!notFound && (!isCashClose(body) || body.businessDate !== daily.date))
+          throw new Error('El cierre recibido no tiene el formato esperado.')
+        const close = notFound ? null : body as CashClose
+        // Read the latest draft after all awaits, never a captured editable snapshot.
         let nextState = stateRef.current
-        if (!businessDate) {
-          nextState = { ...currentState, draft: { ...currentState.draft, businessDate: daily.date } }
+        if (!nextState.draft.businessDate) {
+          nextState = { ...nextState, draft: { ...nextState.draft, businessDate: daily.date } }
           saveCashClose(localStorage, nextState)
           commitState(nextState)
         }
-        const response = await fetch(`/api/cash-closes?date=${encodeURIComponent(daily.date)}`, { signal: controller.signal })
-        if (response.status === 404) {
-          if (!controller.signal.aborted) setExisting(null)
-          return
-        }
-        if (!response.ok) throw new Error(`No se pudo consultar el cierre (${response.status}).`)
-        const body: unknown = await response.json()
-        if (!isCashClose(body)) throw new Error('El cierre recibido no tiene el formato esperado.')
-        if (controller.signal.aborted) return
-        setExisting(body)
-        if (nextState.attempt?.idempotencyKey === body.idempotencyKey) {
-          const completed = completeCashClose(localStorage, nextState, body)
-          commitState(completed)
+        if (close && nextState.attempt?.idempotencyKey === close.idempotencyKey) {
+          commitState(completeCashClose(localStorage, nextState, close))
           setSuccess('Cierre recuperado desde el servidor después de una interrupción.')
-        } else if (nextState.attempt) {
+        } else if (close && nextState.attempt) {
           const resolved: CashCloseState = { version: 1, draft: nextState.draft }
           saveCashClose(localStorage, resolved)
           commitState(resolved)
           setError('Otra operación confirmó el cierre de esta fecha. Se cargó el comprobante existente.')
         }
+        setBusinessToday(today.date)
+        setRemote({ summary: daily, existing: close })
       } catch (cause) {
-        if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'No se pudo conectar con la API.')
+        if (!controller.signal.aborted) {
+          setRemote(null)
+          setError(cause instanceof Error ? cause.message : 'No se pudo conectar con la API.')
+        }
       } finally {
         if (!controller.signal.aborted) setLoading(false)
       }
@@ -89,9 +97,22 @@ export default function CashClosePage() {
       commitState(updated)
       setError('')
       setSuccess('')
-      setLoading(true)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No se pudo guardar el borrador del cierre.')
+    }
+  }
+
+  function changeDate(date: string) {
+    if (!ready || stateRef.current.attempt || inFlight.current || !date) return
+    try {
+      commitState(updateCashCloseDraft(localStorage, stateRef.current, { ...stateRef.current.draft, businessDate: date }))
+      setRemote(null)
+      setLoading(true)
+      setError('')
+      setSuccess('')
+      setBusinessDate(date)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo guardar la fecha.')
     }
   }
 
@@ -112,7 +133,7 @@ export default function CashClosePage() {
       const resolution = await resolveCashCloseAttempt(localStorage, prepared)
       commitState(resolution.state)
       if (resolution.receipt) {
-        setExisting(resolution.receipt)
+        setRemote({ summary, existing: resolution.receipt })
         setSuccess('Cierre confirmado y comprobante guardado.')
         return
       }
@@ -120,7 +141,7 @@ export default function CashClosePage() {
         const lookup = await fetch(`/api/cash-closes?date=${encodeURIComponent(prepared.attempt!.businessDate)}`)
         if (lookup.ok) {
           const confirmed: unknown = await lookup.json()
-          if (isCashClose(confirmed)) setExisting(confirmed)
+          if (isCashClose(confirmed)) setRemote({ summary, existing: confirmed })
         }
         setError('Esta fecha ya tiene un cierre confirmado. Consulta el comprobante mostrado antes de continuar.')
         return
@@ -137,9 +158,9 @@ export default function CashClosePage() {
   }
 
   return <main className="cash-close-page">
-    <div className="cash-close-heading"><div><p className="eyebrow">MAKARI DRINKS · ZIPOLITE</p><h1>Cierre de caja</h1><p>Un cierre compartido por fecha operativa.</p></div><label className="summary-date">Fecha operativa<input type="date" value={state.draft.businessDate || summary?.date || ''} max={businessToday || summary?.date} disabled={!!attempt || loading} onChange={event => editDraft({ ...state.draft, businessDate: event.target.value })} /></label></div>
+    <div className="cash-close-heading"><div><p className="eyebrow">MAKARI DRINKS · ZIPOLITE</p><h1>Cierre de caja</h1><p>Un cierre compartido por fecha operativa.</p></div><label className="summary-date">Fecha operativa<input type="date" value={state.draft.businessDate || summary?.date || ''} max={businessToday || summary?.date} disabled={!ready || !!attempt || sending} onChange={event => changeDate(event.target.value)} /></label></div>
     {loading && <p className="notice" role="status">Cargando ventas y cierre de la fecha…</p>}
-    {error && <div className="notice error" role="alert"><p>{error}</p>{!attempt && <button onClick={() => setReload(value => value + 1)}>Consultar de nuevo</button>}</div>}
+    {error && <div className="notice error" role="alert"><p>{error}</p>{!attempt && <button onClick={() => { setLoading(true); setError(''); setReload(value => value + 1) }}>Consultar de nuevo</button>}</div>}
     {success && <p className="notice success" role="status">{success}</p>}
     {attempt && <div className="notice recovery" role="status"><strong>Intento de cierre pendiente</strong><p>Se conservaron exactamente los importes y la clave. Reintenta para recuperar el mismo comprobante.</p><small>Clave: {attempt.idempotencyKey}</small></div>}
     {summary && <>

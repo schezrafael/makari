@@ -88,8 +88,10 @@ export function isCashClose(value: unknown): value is CashClose {
 
 function validDraft(value: unknown): value is CashCloseDraft {
   return isRecord(value) && (value.businessDate === '' || validDate(value.businessDate))
-    && typeof value.openingCash === 'string' && parseMoneyCents(value.openingCash) !== null
-    && typeof value.countedCash === 'string' && parseMoneyCents(value.countedCash) !== null
+    // A draft may contain intermediate input (empty or a trailing decimal point).
+    // Amount validation belongs to confirmation; pending requests remain strict.
+    && typeof value.openingCash === 'string'
+    && typeof value.countedCash === 'string'
     && typeof value.responsible === 'string' && value.responsible.length <= 100
     && typeof value.observations === 'string' && value.observations.length <= 2000
 }
@@ -107,7 +109,7 @@ export function restoreCashClose(storage: CloseStorage): CashCloseState {
     const request = value.attempt
     if (!validRequest(request) || Object.keys(request).some(key => !['idempotencyKey', 'businessDate', 'openingCash', 'countedCash', 'responsible', 'observations'].includes(key)))
       throw new Error('El intento de cierre guardado es inválido; no generes otra clave.')
-    if (request.businessDate !== value.draft.businessDate
+    if (validateCashCloseDraft(value.draft).length > 0 || request.businessDate !== value.draft.businessDate
       || request.openingCash !== (parseMoneyCents(value.draft.openingCash)! / 100)
       || request.countedCash !== (parseMoneyCents(value.draft.countedCash)! / 100)
       || request.responsible !== value.draft.responsible.trim()

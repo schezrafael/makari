@@ -143,16 +143,17 @@ dotnet build MakariPOS.slnx -m:1
 dotnet test MakariPOS.slnx --no-build -m:1
 ```
 
-Las pruebas usan el runner de Node 24, sin dependencias nuevas. Cubren contratos, cálculo,
+Las pruebas usan el runner de Node 24; `tsx` carga TypeScript/TSX y `jsdom` permite
+probar componentes React con eventos DOM y foco. Cubren contratos, cálculo,
 carrito vacío, cambios de cliente/pago/cantidad, claves de reintento, respuestas ambiguas,
-precio confirmado y errores HTTP. No son pruebas de renderizado de componentes.
+precio confirmado y errores HTTP. La suite de cierre incluye pruebas de renderizado de componentes.
 
 Comprobación histórica M0.6: catálogo sin parámetros, Visitor sin descuento, activar/desactivar
 descuento, cambiar cantidades, confirmación Local y error de cotización con API detenida.
 La creación exitosa Local/Visitor y reintento sin duplicación se prueban en integración
 sobre SQLite aislado; no se crean nuevas ventas en PostgreSQL durante esta verificación.
 Las pruebas Node incluyen respuestas tardías tras cancelación, errores de red/HTTP,
-validación de cotizaciones y conservación de claves. No hay pruebas DOM automatizadas.
+validación de cotizaciones y conservación de claves. El cierre cuenta con pruebas DOM automatizadas desde M0.9.1.
 
 ## Resultado de verificación M0.4
 
@@ -177,3 +178,23 @@ validación de cotizaciones y conservación de claves. No hay pruebas DOM automa
   con folio y total, y HTTP 409 por precio actualizado seguido de nueva cotización.
 - El simulador no modifica PostgreSQL. La migración fue generada y validada con el
   snapshot; sigue sin aplicar. Ver [pruebas PostgreSQL pendientes](../Makari.Api/Features/Sales/CreateSale/README.md).
+
+## M0.9.1 — Estado del formulario de cierre
+
+El resumen y el cierre remoto se publican juntos; el borrador editable y los estados de
+carga/envío se mantienen separados. Editar fondo, conteo, responsable u observaciones
+persiste el borrador y recalcula la diferencia sin consultar la API. La carga ocurre al
+entrar, seleccionar fecha o consultar de nuevo explícitamente. Las respuestas canceladas
+se descartan incluso si llegan tarde. Solo `404` con `code: cash_close_not_found`
+representa una fecha sin cierre; otros errores bloquean la creación.
+
+Un importe vacío o con punto decimal final se conserva como texto de borrador; confirmar
+sigue exigiendo importes válidos. Los intentos pendientes mantienen la validación estricta
+y la misma solicitud/IdempotencyKey. Un comprobante existente se muestra solo lectura,
+y permite consultar otra fecha cuando no hay un envío o intento pendiente.
+
+Verificación: build y lint correctos; 36 pruebas frontend aprobadas, incluidas 7 pruebas
+DOM del cierre (edición, foco, GET, errores 404, fechas, respuestas tardías, confirmación
+y recuperación). En Chrome, con API simulada porque el proxy del entorno devolvía 502,
+se escribió por tecla fondo 300 y conteo 400 con ventas Cash 50: esperado 350 y diferencia
+50, sin loading ni GET adicionales. No se confirmaron cierres contra datos comerciales.
