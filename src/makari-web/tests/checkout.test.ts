@@ -128,3 +128,31 @@ test('Card conserva borrador, POST pendiente y clave tras recarga y confirma', a
   assert.equal(restoreCheckout(db).receipt?.sale.paymentMethod, 'Card')
   assert.equal(restoreCheckout(db).receipt?.sale.idempotencyKey, pending.attempt!.idempotencyKey)
 })
+
+test('rechaza comprador diferente en borrador pendiente o comprobante', async t => {
+  const db = storage()
+  const buyer = { id: saleId, username: 'Ana' }
+  const withBuyer = { ...draft, buyer }
+  const pending = prepareAttempt(db, { version: 1, draft: withBuyer }, operation(makeOrder('Local', 'Transfer', draft.cart, buyer.id), 100))
+  assert.deepEqual(restoreCheckout(db).draft.buyer, buyer)
+  db.setItem(checkoutKey, JSON.stringify({ ...pending, draft: { ...withBuyer, buyer: { id, username: 'Otro' } } }))
+  assert.throws(() => restoreCheckout(db), /no coinciden/)
+  saveCheckout(db, pending)
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ ...sale(pending.attempt!), customerId: id, customerUsernameSnapshot: 'Otro' }))
+  await assert.rejects(resolveAttempt(db, pending), /Resultado no confirmado/)
+  assert.deepEqual(restoreCheckout(db).attempt, pending.attempt)
+})
+
+test('username pendiente se conserva y rechaza otra identidad en el comprobante', async t => {
+  const db = storage()
+  const identified = { ...draft, buyerInput: ' Ana  Luna ' }
+  const request = operation(makeOrder('Local', 'Transfer', draft.cart, undefined, 'Ana Luna'), 100)
+  const pending = prepareAttempt(db, { version: 1, draft: identified }, request)
+  assert.deepEqual(restoreCheckout(db).attempt, request)
+  db.setItem(checkoutKey, JSON.stringify({ ...pending, draft: { ...identified, buyerInput: 'Otro' } }))
+  assert.throws(() => restoreCheckout(db), /no coinciden/)
+  saveCheckout(db, pending)
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ ...sale(request), customerId: saleId, customerUsernameSnapshot: 'Otro' }))
+  await assert.rejects(resolveAttempt(db, restoreCheckout(db)), /Resultado no confirmado/)
+  assert.deepEqual(restoreCheckout(db).attempt, request)
+})

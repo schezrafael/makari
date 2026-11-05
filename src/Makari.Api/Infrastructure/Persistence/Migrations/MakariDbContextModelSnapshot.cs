@@ -182,6 +182,43 @@ namespace Makari.Api.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Makari.Api.Features.Customers.Domain.Customer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("NormalizedUsername")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasComputedColumnSql("lower(\"Username\")", true);
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedUsername")
+                        .IsUnique();
+
+                    b.ToTable("Customers", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("a1200000-0000-4000-8000-000000000001"),
+                            Username = "visitante"
+                        },
+                        new
+                        {
+                            Id = new Guid("a1200000-0000-4000-8000-000000000002"),
+                            Username = "local"
+                        });
+                });
+
             modelBuilder.Entity("Makari.Api.Features.Sales.Domain.Sale", b =>
                 {
                     b.Property<Guid>("Id")
@@ -190,8 +227,15 @@ namespace Makari.Api.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("CustomerType")
                         .HasColumnType("integer");
+
+                    b.Property<string>("CustomerUsernameSnapshot")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
 
                     b.Property<Guid>("IdempotencyKey")
                         .HasColumnType("uuid");
@@ -214,6 +258,8 @@ namespace Makari.Api.Infrastructure.Persistence.Migrations
                         .HasColumnType("numeric(28,2)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
 
                     b.HasIndex("IdempotencyKey")
                         .IsUnique();
@@ -320,6 +366,14 @@ namespace Makari.Api.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("Makari.Api.Features.Sales.Domain.Sale", b =>
+                {
+                    b.HasOne("Makari.Api.Features.Customers.Domain.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Makari.Api.Features.Sales.Domain.SaleItem", b =>

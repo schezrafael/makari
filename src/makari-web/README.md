@@ -202,3 +202,9 @@ se escribió por tecla fondo 300 y conteo 400 con ventas Cash 50: esperado 350 y
 M1.1 incorpora Tarjeta en nueva venta, resumen y cierre. Los borradores y POST pendientes
 conservan Card y su clave al recargar. `cardRevenue` y `cardSales` muestran el ingreso
 electrónico separado; solo Cash se suma al fondo inicial para el efectivo esperado.
+
+M1.2 simplificado añade Comprador con input vacío, chips V/L y hasta cinco frecuentes.
+Escribir no consulta la API: CreateSale resuelve/crea al confirmar. El username y la clave
+persisten antes del POST, y el formulario se bloquea durante un resultado incierto.
+Tras confirmar se restablece Visitante. No hay búsqueda ni creación previa.
+[Contratos y verificación](../../docs/M1.2-customers.md).

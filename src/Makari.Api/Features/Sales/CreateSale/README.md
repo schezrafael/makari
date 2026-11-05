@@ -102,3 +102,9 @@ de la clave terminal. No se modificaron precios ni datos de PostgreSQL en M0.7.
 M1.1: `paymentMethod` accepts `Cash`, `Transfer`, or `Card` (JSON strings).
 Card uses the same pricing, expectedTotal validation and idempotency rules; its persisted
 integer is 2, while Cash=0 and Transfer=1 remain unchanged. No bank terminal integration.
+
+M1.2 simplificado añade `customerUsername` a la solicitud: se resuelve/crea dentro de la
+transacción al confirmar. Ausente o vacío usa visitante en ventas nuevas. La respuesta
+incluye `customerId` y `customerUsernameSnapshot`; se conserva compatibilidad con
+solicitudes antiguas sin identidad o con CustomerId. Comprador y CustomerType son independientes.
+[Contratos, compatibilidad y migraciones](../../../../../docs/M1.2-customers.md).

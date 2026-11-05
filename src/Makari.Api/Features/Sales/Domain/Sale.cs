@@ -14,7 +14,9 @@ public sealed class Sale
         string registeredBy,
         Guid idempotencyKey,
         string requestFingerprint,
-        DateTimeOffset createdAtUtc)
+        DateTimeOffset createdAtUtc,
+        Guid? customerId = null,
+        string? customerUsernameSnapshot = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(registeredBy);
         ArgumentException.ThrowIfNullOrWhiteSpace(requestFingerprint);
@@ -22,6 +24,8 @@ public sealed class Sale
         if (!Enum.IsDefined(customerType)) throw new ArgumentOutOfRangeException(nameof(customerType));
         if (!Enum.IsDefined(paymentMethod)) throw new ArgumentOutOfRangeException(nameof(paymentMethod));
 
+        CustomerId = customerId;
+        CustomerUsernameSnapshot = customerUsernameSnapshot;
         Id = Guid.NewGuid();
         CreatedAtUtc = createdAtUtc.ToUniversalTime();
         CustomerType = customerType;
@@ -33,6 +37,8 @@ public sealed class Sale
 
     public Guid Id { get; private set; }
     public DateTimeOffset CreatedAtUtc { get; private set; }
+    public Guid? CustomerId { get; private set; }
+    public string? CustomerUsernameSnapshot { get; private set; }
     public CustomerType CustomerType { get; private set; }
     public PaymentMethod PaymentMethod { get; private set; }
     public decimal Total { get; private set; }
@@ -40,6 +46,12 @@ public sealed class Sale
     public Guid IdempotencyKey { get; private set; }
     public string RequestFingerprint { get; private set; } = null!;
     public IReadOnlyCollection<SaleItem> Items => _items.AsReadOnly();
+
+    internal void IdentifyBuyer(Guid customerId, string username)
+    {
+        CustomerId = customerId;
+        CustomerUsernameSnapshot = username;
+    }
 
     public SaleItem AddItem(Guid productVariantId, int quantity, decimal unitPrice)
     {

@@ -1,3 +1,4 @@
+using Makari.Api.Features.Customers;
 using Makari.Api.Features.Catalog.GetCatalog;
 using Makari.Api.Features.Catalog.Persistence;
 using Makari.Api.Features.CashCloses.CreateDailyCashClose;
@@ -49,6 +50,7 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
 }
 
+app.MapCustomerEndpoints();
 app.MapHealthEndpoint();
 app.MapGetCatalogEndpoint();
 app.MapCreateSaleEndpoint();

@@ -1,8 +1,10 @@
+import { isCustomer, normalizeUsername } from '../customers/customers.ts'
+import type { Customer } from '../customers/customers.ts'
 import { isConfirmedSale, makeOrder } from './model.ts'
 import type { Cart, PaymentMethod, SaleRequest, SaleResponse } from './model.ts'
 
 export const checkoutKey = 'makari.checkout.v1'
-export type Draft = { cart: Cart; localDiscount: boolean; payment: PaymentMethod }
+export type Draft = { cart: Cart; localDiscount: boolean; payment: PaymentMethod; buyer?: Customer; buyerInput?: string; buyerGeneric?: 'visitante' | 'local' }
 export type Checkout = {
   version: 1
   draft: Draft
@@ -11,17 +13,30 @@ export type Checkout = {
 }
 export type CheckoutStorage = Pick<Storage, 'getItem' | 'setItem'>
 export const emptyCheckout = (): Checkout => ({ version: 1, draft: { cart: {}, localDiscount: false, payment: 'Cash' } })
+export function buyerInput(draft: Draft): string {
+  if (draft.buyerInput !== undefined) return draft.buyerInput
+  if (!draft.buyer || ['a1200000-0000-4000-8000-000000000001', 'a1200000-0000-4000-8000-000000000002'].includes(draft.buyer.id)) return ''
+  return draft.buyer.username
+}
+export function buyerGeneric(draft: Draft): 'visitante' | 'local' | undefined {
+  if (buyerInput(draft).trim()) return undefined
+  return draft.buyerGeneric ?? (draft.buyer?.id === 'a1200000-0000-4000-8000-000000000002' ? 'local' : 'visitante')
+}
+export function buyerUsername(draft: Draft): string {
+  return buyerInput(draft).trim() ? normalizeUsername(buyerInput(draft)) : buyerGeneric(draft) ?? 'visitante'
+}
 const object = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 const uuid = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) && value !== '00000000-0000-0000-0000-000000000000'
 const quantity = (value: unknown): value is number => Number.isInteger(value) && Number(value) > 0 && Number(value) <= 999
 const amount = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0 && Number.isSafeInteger(Math.round(value * 100)) && Math.abs(value * 100 - Math.round(value * 100)) < 0.00001
 
 function validRequest(value: unknown): value is SaleRequest {
-  return object(value) && uuid(value.idempotencyKey) && amount(value.expectedTotal) &&
+  return object(value) && (value.customerUsername === undefined || typeof value.customerUsername === 'string' && value.customerUsername.length <= 256)
+    && !(value.customerId != null && value.customerUsername !== undefined) && (value.customerId == null || uuid(value.customerId)) && uuid(value.idempotencyKey) && amount(value.expectedTotal) &&
     ['Local', 'Visitor'].includes(String(value.customerType)) && ['Cash', 'Transfer', 'Card'].includes(String(value.paymentMethod)) &&
     Array.isArray(value.items) && value.items.length > 0 && value.items.every(item => object(item) && uuid(item.productVariantId) && quantity(item.quantity)) &&
     new Set(value.items.map(item => item.productVariantId)).size === value.items.length &&
-    Object.keys(value).every(key => ['customerType', 'paymentMethod', 'items', 'idempotencyKey', 'expectedTotal'].includes(key)) &&
+    Object.keys(value).every(key => ['customerType', 'paymentMethod', 'items', 'idempotencyKey', 'expectedTotal', 'customerId', 'customerUsername'].includes(key)) &&
     value.items.every(item => Object.keys(item).every(key => ['productVariantId', 'quantity'].includes(key)))
 }
 
@@ -36,11 +51,23 @@ export function restoreCheckout(storage: CheckoutStorage): Checkout {
     !Object.entries(value.draft.cart).every(([id, count]) => uuid(id) && quantity(count)))
     throw new Error('El borrador guardado es inválido o usa otra versión. No se ha borrado; revisa el almacenamiento antes de cobrar.')
   const draft: Draft = { cart: { ...value.draft.cart } as Cart, localDiscount: value.draft.localDiscount, payment: value.draft.payment as PaymentMethod }
+  if (value.draft.buyer !== undefined) {
+    if (!isCustomer(value.draft.buyer)) throw new Error('El comprador guardado no es válido. No se ha borrado el borrador.')
+    draft.buyer = value.draft.buyer
+  }
+  if (value.draft.buyerInput !== undefined) {
+    if (typeof value.draft.buyerInput !== 'string' || value.draft.buyerInput.length > 256) throw new Error('El comprador guardado no es válido.')
+    draft.buyerInput = value.draft.buyerInput
+  }
+  if (value.draft.buyerGeneric !== undefined) {
+    if (!['visitante', 'local'].includes(String(value.draft.buyerGeneric))) throw new Error('El comprador genérico no es válido.')
+    draft.buyerGeneric = value.draft.buyerGeneric as 'visitante' | 'local'
+  }
   const result: Checkout = { version: 1, draft }
   if (value.attempt !== undefined) {
     if (!validRequest(value.attempt)) throw new Error('El intento guardado es inválido. No inicies otra venta hasta revisar su clave.')
-    const order = makeOrder(draft.localDiscount ? 'Local' : 'Visitor', draft.payment, draft.cart)
-    const attemptOrder = makeOrder(value.attempt.customerType, value.attempt.paymentMethod, Object.fromEntries(value.attempt.items.map(item => [item.productVariantId, item.quantity])))
+    const order = makeOrder(draft.localDiscount ? 'Local' : 'Visitor', draft.payment, draft.cart, value.attempt.customerUsername === undefined ? draft.buyer?.id : undefined, value.attempt.customerUsername === undefined ? undefined : buyerUsername(draft))
+    const attemptOrder = makeOrder(value.attempt.customerType, value.attempt.paymentMethod, Object.fromEntries(value.attempt.items.map(item => [item.productVariantId, item.quantity])), value.attempt.customerId, value.attempt.customerUsername)
     if (JSON.stringify(order) !== JSON.stringify(attemptOrder)) throw new Error('El borrador y el intento guardado no coinciden. Se requiere revisar la operación.')
     result.attempt = value.attempt
   }

@@ -9,6 +9,8 @@ public sealed record CreateSaleRequest(
     CustomerType CustomerType,
     PaymentMethod PaymentMethod,
     IReadOnlyList<CreateSaleItemRequest> Items,
-    [property: JsonRequired] decimal? ExpectedTotal = null);
+    [property: JsonRequired] decimal? ExpectedTotal = null,
+    Guid? CustomerId = null,
+    string? CustomerUsername = null);
 
 public sealed record CreateSaleItemRequest(Guid ProductVariantId, int Quantity);

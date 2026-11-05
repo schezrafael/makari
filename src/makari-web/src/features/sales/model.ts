@@ -1,20 +1,23 @@
+import { normalizeUsername } from '../customers/customers.ts'
+
 export type CustomerType = 'Local' | 'Visitor'
 export type PaymentMethod = 'Cash' | 'Transfer' | 'Card'
 export type Variant = { id: string; name: string; sizeMl: number; price: number }
 export type Product = { id: string; name: string; category: string; variants: Variant[] }
 export type Cart = Record<string, number>
-export type Order = { customerType: CustomerType; paymentMethod: PaymentMethod; items: { productVariantId: string; quantity: number }[] }
+export type Order = { customerType: CustomerType; paymentMethod: PaymentMethod; customerId?: string | null; customerUsername?: string; items: { productVariantId: string; quantity: number }[] }
 export type SaleRequest = Order & { idempotencyKey: string; expectedTotal: number }
 export type SaleResponse = Omit<SaleRequest, 'items' | 'expectedTotal'> & {
   id: string
   createdAtUtc: string
   total: number
   registeredBy: string
+  customerUsernameSnapshot?: string | null
   items: { id: string; productVariantId: string; quantity: number; unitPrice: number; subtotal: number }[]
 }
 
-export function makeOrder(customerType: CustomerType, paymentMethod: PaymentMethod, cart: Cart): Order {
-  return { customerType, paymentMethod, items: Object.entries(cart).filter(([, quantity]) => quantity > 0)
+export function makeOrder(customerType: CustomerType, paymentMethod: PaymentMethod, cart: Cart, customerId?: string | null, customerUsername?: string): Order {
+  return { customerType, paymentMethod, ...(customerId ? { customerId } : {}), ...(customerUsername !== undefined ? { customerUsername } : {}), items: Object.entries(cart).filter(([, quantity]) => quantity > 0)
     .sort(([a], [b]) => a.localeCompare(b)).map(([productVariantId, quantity]) => ({ productVariantId, quantity })) }
 }
 
@@ -37,6 +40,15 @@ export function isCatalog(value: unknown): value is { products: Product[] } {
 
 export function isConfirmedSale(value: unknown, request: SaleRequest): value is SaleResponse {
   if (!record(value) || !guid(value.id) || typeof value.createdAtUtc !== 'string' || !Number.isFinite(Date.parse(value.createdAtUtc)) || typeof value.registeredBy !== 'string' || !money(value.total) || Math.round(value.total * 100) !== Math.round(request.expectedTotal * 100) || value.idempotencyKey !== request.idempotencyKey || value.customerType !== request.customerType || value.paymentMethod !== request.paymentMethod || !Array.isArray(value.items) || value.items.length !== request.items.length) return false
+  if (request.customerUsername !== undefined) {
+    if (!guid(value.customerId) || typeof value.customerUsernameSnapshot !== 'string') return false
+    try {
+      if (normalizeUsername(value.customerUsernameSnapshot).toLowerCase() !== normalizeUsername(request.customerUsername.trim() || 'visitante').toLowerCase()) return false
+    } catch { return false }
+  } else if (request.customerId) {
+    if (value.customerId !== request.customerId) return false
+  } else if (value.customerId != null && value.customerUsernameSnapshot !== 'visitante') return false
+  if (request.customerId && (typeof value.customerUsernameSnapshot !== 'string' || !value.customerUsernameSnapshot)) return false
   const items = value.items
   return request.items.every(expected => items.filter(item => record(item) && guid(item.id) && item.productVariantId === expected.productVariantId && item.quantity === expected.quantity && money(item.unitPrice) && money(item.subtotal) && Math.round(item.subtotal * 100) === Math.round(item.unitPrice * 100) * expected.quantity).length === 1)
     && Math.round(value.total * 100) === items.reduce((sum, item) => sum + Math.round(item.subtotal * 100), 0)

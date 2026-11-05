@@ -1,5 +1,6 @@
+import CustomerPicker from '../customers/CustomerPicker'
 import { StatusMessage, PageHeader } from '../../components/ui'
-import { emptyCheckout, prepareAttempt, resolveAttempt, restoreCheckout, updateDraft } from './checkout'
+import { buyerInput, buyerGeneric, buyerUsername, emptyCheckout, prepareAttempt, resolveAttempt, restoreCheckout, updateDraft } from './checkout'
 import type { Draft } from './checkout'
 import { startQuote } from './quote'
 import type { Quote, QuoteRequest } from './quote'
@@ -40,6 +41,9 @@ export default function SalesPage() {
   const subtotal = quote?.subtotal ?? visitorSubtotal
   const discount = quote?.discount ?? 0
   const total = attempt?.expectedTotal ?? quote?.total ?? visitorSubtotal
+  let buyerError = ''
+  try { buyerUsername(checkout.draft) }
+  catch (cause) { buyerError = cause instanceof Error ? cause.message : 'Revisa el username.' }
   const count = Object.values(cart).reduce((sum, quantity) => sum + quantity, 0)
   const locked = sending || confirming || !!attempt || !ready || !!storageError
   const lines = products.flatMap(product => product.variants.map(variant => ({ ...variant, product: product.name }))).filter(variant => cart[variant.id] > 0)
@@ -95,11 +99,16 @@ export default function SalesPage() {
     try {
       setCheckout(updateDraft(localStorage, checkout, next))
       setError('')
-      setQuotation(null)
-      setQuoteRetry(value => value + 1)
     } catch (cause) {
       setStorageError(cause instanceof Error ? cause.message : 'No se pudo guardar el borrador.')
     }
+  }
+  function selectBuyer(input: string, generic?: 'visitante' | 'local') {
+    if (locked) return
+    editDraft({
+      ...checkout.draft, buyer: undefined, buyerInput: input, buyerGeneric: generic,
+      localDiscount: generic === 'visitante' ? false : generic === 'local' ? true : checkout.draft.localDiscount,
+    })
   }
   function quantity(id: string, value: number) {
     editDraft({ ...checkout.draft, cart: { ...cart, [id]: value } })
@@ -114,12 +123,12 @@ export default function SalesPage() {
   }
   async function submit() {
     if (inFlight.current || !ready || storageError) return
-    if (!attempt && (quoteBlocked || count === 0 || loading || catalogError || unavailable)) return
+    if (!attempt && (quoteBlocked || buyerError || count === 0 || loading || catalogError || unavailable)) return
     inFlight.current = true
     setSending(true)
     setError('')
     try {
-      const request = operation(makeOrder(customer, payment, cart), total, attempt)
+      const request = operation(makeOrder(customer, payment, cart, undefined, buyerUsername(checkout.draft)), total, attempt)
       const saved = prepareAttempt(localStorage, checkout, request)
       setCheckout(saved)
       const result = await resolveAttempt(localStorage, saved)
@@ -152,11 +161,13 @@ export default function SalesPage() {
         {loading ? <StatusMessage>Cargando bebidas y precios…</StatusMessage> : catalogError ? <div className="notice error" role="alert"><p>{catalogError}</p><button onClick={() => { setLoading(true); setCatalogError(''); setReload(value => value + 1) }}>Reintentar catálogo</button></div> : products.length === 0 ? <p className="notice">No hay bebidas disponibles.</p> : <div className="products">{products.map((product) => <article className="product" key={product.id}><div className="product-banner"><span>{product.category}</span></div><div className="product-body"><h3>{product.name}</h3>{product.variants.length === 0 && <p>Sin presentaciones disponibles.</p>}{product.variants.map(variant => <div className="variant" key={variant.id}><div><h4>{variant.name}</h4><span className="size">{variant.sizeMl} ml</span><strong>{currency(variant.price)}</strong></div><Quantity name={`${product.name}, ${variant.name}`} value={cart[variant.id] ?? 0} disabled={locked} onChange={value => quantity(variant.id, value)} /></div>)}</div></article>)}</div>}
       </section>
       <aside className="order" aria-labelledby="order-title"><div className="section-title"><h2 id="order-title">Tu pedido</h2><span className="badge">{count}</span></div>
-        {success && <div className="notice success" role="status"><strong>Venta registrada</strong><p>Total confirmado: {currency(success.total)}</p><small>Folio: {success.id}</small></div>}
+        {success && <div className="notice success" role="status"><strong>Venta registrada</strong>{success.customerUsernameSnapshot && <p>Comprador: {success.customerUsernameSnapshot}</p>}<p>Total confirmado: {currency(success.total)}</p><small>Folio: {success.id}</small></div>}
         {attempt && <div className="notice recovery" role="status"><strong>Operación pendiente de resolver</strong><p>El pedido está bloqueado. Reintenta para recuperar o completar la misma venta, sin cobrar de nuevo.</p><p>Importe confirmado: {currency(attempt.expectedTotal)}</p><small>Clave: {attempt.idempotencyKey}</small><ul>{attempt.items.map(item => <li key={item.productVariantId}>{item.quantity} × {lines.find(line => line.id === item.productVariantId)?.product ?? item.productVariantId}</li>)}</ul></div>}
         {error && <div className="notice error" role="alert"><strong>No se confirmó la venta</strong><p>{error}</p></div>}
         {count === 0 ? <div className="empty"><span aria-hidden="true">✳</span><h3>Pedido vacío</h3><p>Agrega una bebida para comenzar.</p></div> : loading ? <p role="status">Actualizando precios del pedido…</p> : <ul className="cart-lines">{lines.map(line => <li key={line.id}><div><strong>{line.product}</strong><span>{line.name} · {line.sizeMl} ml</span><b>{currency(Math.round(line.price * 100) * cart[line.id] / 100)}</b></div><Quantity name={`${line.product}, ${line.name} del pedido`} value={cart[line.id]} disabled={locked} onChange={value => quantity(line.id, value)} /></li>)}</ul>}
         {unavailable && !loading && <div className="notice error" role="alert">Hay bebidas que ya no están disponibles. <button disabled={locked} onClick={() => { editDraft({ ...checkout.draft, cart: Object.fromEntries(lines.map(line => [line.id, cart[line.id]])) }) }}>quita las bebidas no disponibles</button>.</div>}
+        <CustomerPicker input={buyerInput(checkout.draft)} generic={buyerGeneric(checkout.draft)} disabled={locked} onChange={selectBuyer} />
+        {buyerError && <p className="notice error" role="alert">{buyerError}</p>}
         <div className="discount-control">
           <label><input type="checkbox" checked={localDiscount} disabled={locked} onChange={toggleDiscount} /> Descuento local</label>
           <p>Aplica los precios locales vigentes a este pedido.</p>
@@ -170,10 +181,10 @@ export default function SalesPage() {
         </dl>
         <fieldset disabled={locked}><legend>Forma de pago</legend><div className="segmented">{(['Cash', 'Transfer', 'Card'] as const).map(method => <button key={method} aria-pressed={payment === method} onClick={() => { if (payment !== method) { editDraft({ ...checkout.draft, payment: method }) } }}>{method === 'Cash' ? 'Efectivo' : method === 'Transfer' ? 'Transferencia' : 'Tarjeta'}</button>)}</div></fieldset>
         <p className="payment-note">Verifica que recibiste el pago antes de registrar.</p>
-        <div className="checkout"><div><span>Total a cobrar</span><strong>{!attempt && (loading || catalogError || unavailable || (count > 0 && quoteBlocked)) ? '—' : currency(total)}</strong></div><button className="primary" disabled={sending || confirming || !ready || !!storageError || (!attempt && (loading || !!catalogError || unavailable || count === 0 || quoteBlocked))} onClick={() => { if (attempt) { void submit(); return } setConfirming(true); dialog.current?.showModal() }}>{sending ? 'Registrando…' : attempt ? 'Recuperar venta' : 'Registrar venta'} <span aria-hidden="true">↗</span></button></div><p className="total-note">Los precios se confirman al registrar.</p>
+        <div className="checkout"><div><span>Total a cobrar</span><strong>{!attempt && (loading || catalogError || unavailable || (count > 0 && quoteBlocked)) ? '—' : currency(total)}</strong></div><button className="primary" disabled={sending || confirming || !ready || !!storageError || (!attempt && (loading || !!catalogError || unavailable || count === 0 || quoteBlocked || !!buyerError))} onClick={() => { if (attempt) { void submit(); return } setConfirming(true); dialog.current?.showModal() }}>{sending ? 'Registrando…' : attempt ? 'Recuperar venta' : 'Registrar venta'} <span aria-hidden="true">↗</span></button></div><p className="total-note">Los precios se confirman al registrar.</p>
       </aside>
     </main>
     <footer>MAKARI DRINKS <span>Un sorbo de Zipolite.</span></footer>
-    <dialog ref={dialog} aria-labelledby="confirm-title" onCancel={event => { event.preventDefault(); closeConfirmation() }}><h2 id="confirm-title">Confirmar venta</h2><p>{customer === 'Local' ? 'Cliente local' : 'Visitante'} · {payment === 'Cash' ? 'Efectivo' : payment === 'Transfer' ? 'Transferencia' : 'Tarjeta'}</p><ul className="confirmation-lines">{lines.map(line => <li key={line.id}>{cart[line.id]} × {line.product} · {line.name}</li>)}</ul><div className="confirm-total">Total a confirmar <strong>{currency(total)}</strong></div><p>Confirma este importe y el pago recibido. Si el precio cambió, no se registrará la venta y pediremos una nueva confirmación.</p><div className="dialog-actions"><button disabled={sending} onClick={closeConfirmation}>Volver</button><button className="primary" disabled={sending || quoteBlocked} onClick={() => void submit()}>{sending ? 'Registrando…' : 'Confirmar y registrar'}</button></div><p role="status">{sending ? 'Espera la confirmación. No cierres esta página.' : ''}</p></dialog>
+    <dialog ref={dialog} aria-labelledby="confirm-title" onCancel={event => { event.preventDefault(); closeConfirmation() }}><h2 id="confirm-title">Confirmar venta</h2><p>Comprador: {buyerInput(checkout.draft).trim() || buyerGeneric(checkout.draft) || 'visitante'}</p><p>{customer === 'Local' ? 'Cliente local' : 'Visitante'} · {payment === 'Cash' ? 'Efectivo' : payment === 'Transfer' ? 'Transferencia' : 'Tarjeta'}</p><ul className="confirmation-lines">{lines.map(line => <li key={line.id}>{cart[line.id]} × {line.product} · {line.name}</li>)}</ul><div className="confirm-total">Total a confirmar <strong>{currency(total)}</strong></div><p>Confirma este importe y el pago recibido. Si el precio cambió, no se registrará la venta y pediremos una nueva confirmación.</p><div className="dialog-actions"><button disabled={sending} onClick={closeConfirmation}>Volver</button><button className="primary" disabled={sending || quoteBlocked} onClick={() => void submit()}>{sending ? 'Registrando…' : 'Confirmar y registrar'}</button></div><p role="status">{sending ? 'Espera la confirmación. No cierres esta página.' : ''}</p></dialog>
   </>
 }

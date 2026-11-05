@@ -11,7 +11,9 @@ public sealed record CreateSaleResponse(
     decimal Total,
     string RegisteredBy,
     Guid IdempotencyKey,
-    IReadOnlyList<CreateSaleItemResponse> Items);
+    IReadOnlyList<CreateSaleItemResponse> Items,
+    Guid? CustomerId = null,
+    string? CustomerUsernameSnapshot = null);
 
 public sealed record CreateSaleItemResponse(
     Guid Id, Guid ProductVariantId, int Quantity, decimal UnitPrice, decimal Subtotal);

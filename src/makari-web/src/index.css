@@ -754,3 +754,10 @@ footer { letter-spacing:.05em; }
 
 .summary-cards .summary-card:first-child > span,.close-calculation small { color:var(--text); }
 .main-nav button:hover:not([aria-current=page]) { background:var(--background); }
+
+.buyer-picker { margin:var(--space-4) 0; min-width:0; }
+.buyer-picker label { display:block; margin-bottom:var(--space-2); }
+.buyer-picker input { width:100%; min-width:0; }
+.buyer-actions { display:flex; flex-wrap:wrap; gap:var(--space-2); margin-top:var(--space-2); }
+.buyer-actions button { border-radius:var(--radius-lg); max-width:100%; overflow-wrap:anywhere; }
+.buyer-actions button[aria-pressed=true] { background:var(--primary); color:var(--surface); }

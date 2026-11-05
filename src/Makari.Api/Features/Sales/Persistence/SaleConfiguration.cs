@@ -17,6 +17,9 @@ public sealed class SaleConfiguration : IEntityTypeConfiguration<Sale>
         builder.HasKey(sale => sale.Id);
         builder.Property(sale => sale.Id).ValueGeneratedNever();
         builder.Property(sale => sale.CreatedAtUtc).HasColumnType("timestamp with time zone").IsRequired();
+        builder.Property(sale => sale.CustomerUsernameSnapshot).HasMaxLength(40);
+        builder.HasOne<Makari.Api.Features.Customers.Domain.Customer>().WithMany()
+            .HasForeignKey(sale => sale.CustomerId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(sale => sale.CustomerType).HasConversion<int>().IsRequired();
         builder.Property(sale => sale.PaymentMethod).HasConversion<int>().IsRequired();
         builder.Property(sale => sale.Total).HasPrecision(28, 2).IsRequired();

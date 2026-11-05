@@ -23,12 +23,13 @@ afterEach(async () => { if (root) await act(async () => root.unmount()); localSt
 
 test('selecciona Tarjeta, restaura selección y confirma Card desde la pantalla', async t => {
   t.mock.method(globalThis, 'fetch', async (url: string, options?: RequestInit) => {
+    if (url === '/api/customers/frequent?limit=5') return Response.json([])
     if (url === '/api/catalog') return Response.json({ products: [{ id, name: 'Cold Brew', category: 'Bebidas', variants: [{ id, name: 'Natural', sizeMl: 300, price: 60 }] }] })
     const request = JSON.parse(options!.body as string)
     if (url === '/api/sales/quote') return Response.json({ ...request, subtotal: 60, discount: 0, total: 60, items: [{ ...request.items[0], visitorUnitPrice: 60, unitPrice: 60, subtotal: 60, discount: 0, total: 60 }] })
     assert.equal(request.paymentMethod, 'Card')
     assert.deepEqual(restoreCheckout(localStorage).attempt, request)
-    return Response.json({ ...request, id, createdAtUtc: '2026-11-04T12:00:00Z', registeredBy: 'Andi', total: 60, items: [{ ...request.items[0], id, unitPrice: 60, subtotal: 60 }] }, { status: 201 })
+    return Response.json({ ...request, id, createdAtUtc: '2026-11-04T12:00:00Z', registeredBy: 'Andi', customerId: 'a1200000-0000-4000-8000-000000000001', customerUsernameSnapshot: 'visitante', total: 60, items: [{ ...request.items[0], id, unitPrice: 60, subtotal: 60 }] }, { status: 201 })
   })
   await mount()
   assert.equal(button('Efectivo').getAttribute('aria-pressed'), 'true')

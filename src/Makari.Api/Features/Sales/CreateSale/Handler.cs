@@ -1,4 +1,5 @@
 using System.Globalization;
+using Makari.Api.Features.Customers.Domain;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -82,8 +83,16 @@ public sealed class CreateSaleHandler(MakariDbContext context, IConfiguration co
             throw new InvalidOperationException("Sales:RegisteredBy must contain 1 to 100 characters.");
         }
 
+        var customer = request.CustomerId is null ? null : await context.Customers.AsNoTracking()
+            .SingleOrDefaultAsync(row => row.Id == request.CustomerId, cancellationToken);
+        if (request.CustomerId is not null && customer is null)
+            return await RejectAsync(CreateSaleOutcome.Invalid(new Dictionary<string, string[]>
+            {
+                ["customerId"] = ["The selected buyer does not exist."]
+            }));
+
         var sale = new Sale(request.CustomerType, request.PaymentMethod, operatorName,
-            request.IdempotencyKey, fingerprint, createdAtUtc);
+            request.IdempotencyKey, fingerprint, createdAtUtc, customer?.Id, customer?.Username);
 
         var variantIds = request.Items.Select(item => item.ProductVariantId).ToArray();
         var prices = await SalePricing.LoadAsync(context, variantIds, request.CustomerType, cancellationToken);
@@ -105,6 +114,35 @@ public sealed class CreateSaleHandler(MakariDbContext context, IConfiguration co
 
         if (sale.Total != request.ExpectedTotal)
             return await RejectAsync(CreateSaleOutcome.PriceChanged(sale.Total));
+
+        // Resolve only after every rejection condition; insertion and sale share this transaction.
+        if (customer is null)
+        {
+            var username = NormalizeBuyer(request.CustomerUsername);
+            var normalized = username.ToLowerInvariant();
+            if (context.Database.IsNpgsql())
+            {
+                // ON CONFLICT waits for another creator without aborting our transaction.
+                var customerId = Guid.NewGuid();
+                await context.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO "Customers" ("Id", "Username") VALUES ({customerId}, {username})
+                    ON CONFLICT ("NormalizedUsername") DO NOTHING
+                    """, cancellationToken);
+                customer = await context.Customers.AsNoTracking()
+                    .SingleAsync(row => row.NormalizedUsername == normalized, cancellationToken);
+            }
+            else
+            {
+                customer = await context.Customers.SingleOrDefaultAsync(row => row.NormalizedUsername == normalized, cancellationToken);
+                if (customer is null)
+                {
+                    customer = new Customer(username);
+                    context.Customers.Add(customer);
+                    await context.SaveChangesAsync(cancellationToken);
+                }
+            }
+        }
+        sale.IdentifyBuyer(customer.Id, customer.Username);
 
         var uniqueConflict = false;
         context.Sales.Add(sale);
@@ -146,13 +184,23 @@ public sealed class CreateSaleHandler(MakariDbContext context, IConfiguration co
         sale.RegisteredBy, sale.IdempotencyKey,
         sale.Items.OrderBy(item => item.ProductVariantId)
             .Select(item => new CreateSaleItemResponse(item.Id, item.ProductVariantId,
-                item.Quantity, item.UnitPrice, item.Subtotal)).ToArray());
+                item.Quantity, item.UnitPrice, item.Subtotal)).ToArray(), sale.CustomerId, sale.CustomerUsernameSnapshot);
+
+    private static string NormalizeBuyer(string? username)
+    {
+        if (string.IsNullOrWhiteSpace(username)) return "visitante";
+        if (!Customer.TryNormalize(username, out var clean)) throw new ArgumentException(Customer.UsernameRule);
+        return clean;
+    }
 
     private static string CreateFingerprint(CreateSaleRequest request)
     {
         var canonicalItems = request.Items.OrderBy(item => item.ProductVariantId)
             .Select(item => $"{item.ProductVariantId:N}:{item.Quantity.ToString(CultureInfo.InvariantCulture)}");
         var canonical = $"{(int)request.CustomerType}|{(int)request.PaymentMethod}|{string.Join(';', canonicalItems)}";
+        // Preserve fingerprints of pre-customer pending requests and historical sales.
+        if (request.CustomerId is not null) canonical += $"|customer:{request.CustomerId.Value:N}";
+        if (request.CustomerUsername is not null) canonical += $"|username:{NormalizeBuyer(request.CustomerUsername).ToLowerInvariant()}";
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
     }
 

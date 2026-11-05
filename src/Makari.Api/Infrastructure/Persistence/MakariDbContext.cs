@@ -11,6 +11,7 @@ public sealed class MakariDbContext(DbContextOptions<MakariDbContext> options)
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductVariant> ProductVariants => Set<ProductVariant>();
     public DbSet<ProductPrice> ProductPrices => Set<ProductPrice>();
+    public DbSet<Makari.Api.Features.Customers.Domain.Customer> Customers => Set<Makari.Api.Features.Customers.Domain.Customer>();
     public DbSet<Sale> Sales => Set<Sale>();
     public DbSet<SaleItem> SaleItems => Set<SaleItem>();
     public DbSet<DailyCashClose> DailyCashCloses => Set<DailyCashClose>();
