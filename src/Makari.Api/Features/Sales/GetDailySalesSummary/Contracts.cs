@@ -7,6 +7,7 @@ public sealed record GetDailySalesSummaryResponse(
     decimal TotalRevenue,
     decimal CashRevenue,
     decimal TransferRevenue,
+    decimal CardRevenue,
     long UnitsSold,
     IReadOnlyList<VariantDailySalesSummary> Variants);
 

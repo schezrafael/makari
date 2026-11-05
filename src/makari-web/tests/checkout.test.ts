@@ -110,3 +110,21 @@ test('si falla guardar el éxito, conserva el intento recuperable', async t => {
   assert.deepEqual(restoreCheckout(db).attempt, pending.attempt)
   saveCheckout(db, pending)
 })
+
+test('Card conserva borrador, POST pendiente y clave tras recarga y confirma', async t => {
+  const db = storage()
+  assert.equal(emptyCheckout().draft.payment, 'Cash')
+  const cardDraft = { ...draft, payment: 'Card' as const }
+  const state = updateDraft(db, emptyCheckout(), cardDraft)
+  assert.deepEqual(restoreCheckout(db).draft, cardDraft)
+  const pending = prepareAttempt(db, state, operation(makeOrder('Local', 'Card', cardDraft.cart), 100))
+  const mock = t.mock.method(globalThis, 'fetch', async () => { throw new Error('offline') })
+  await assert.rejects(resolveAttempt(db, pending), /offline/)
+  mock.mock.mockImplementation(async (_url: string, options: RequestInit) => {
+    assert.deepEqual(JSON.parse(options.body as string), pending.attempt)
+    return Response.json(sale(pending.attempt!), { status: 200 })
+  })
+  await resolveAttempt(db, restoreCheckout(db))
+  assert.equal(restoreCheckout(db).receipt?.sale.paymentMethod, 'Card')
+  assert.equal(restoreCheckout(db).receipt?.sale.idempotencyKey, pending.attempt!.idempotencyKey)
+})

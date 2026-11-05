@@ -168,6 +168,7 @@ export default function CashClosePage() {
         <article><span>Ventas registradas</span><strong>{summary.salesCount}</strong></article>
         <article><span>Ventas en efectivo</span><strong>{money(summary.cashRevenue)}</strong></article>
         <article><span>Transferencias</span><strong>{money(summary.transferRevenue)}</strong></article>
+        <article><span>Tarjeta</span><strong>{money(summary.cardRevenue)}</strong></article>
         <article><span>Total vendido</span><strong>{money(summary.totalRevenue)}</strong></article>
       </section>
       {closed ? <CashCloseReceipt close={closed} /> : <section className="cash-close-form" aria-labelledby="cash-close-form-title">
@@ -202,7 +203,7 @@ function CashCloseReceipt({ close }: { close: CashClose }) {
     <dl>
       <div><dt>Folio</dt><dd>{close.id}</dd></div><div><dt>Fecha operativa</dt><dd>{close.businessDate}</dd></div>
       <div><dt>Fondo inicial</dt><dd>{money(close.openingCash)}</dd></div><div><dt>Ventas en efectivo</dt><dd>{money(close.cashSales)}</dd></div>
-      <div><dt>Transferencias</dt><dd>{money(close.transferSales)}</dd></div><div><dt>Total vendido</dt><dd>{money(close.totalRevenue)}</dd></div>
+      <div><dt>Transferencias</dt><dd>{money(close.transferSales)}</dd></div><div><dt>Tarjeta</dt><dd>{money(close.cardSales)}</dd></div><div><dt>Total vendido</dt><dd>{money(close.totalRevenue)}</dd></div>
       <div><dt>Número de ventas</dt><dd>{close.salesCount}</dd></div><div><dt>Efectivo esperado</dt><dd>{money(close.expectedCash)}</dd></div>
       <div><dt>Efectivo contado</dt><dd>{money(close.countedCash)}</dd></div><div><dt>Diferencia</dt><dd>{close.difference < 0 ? '−' : ''}{money(Math.abs(close.difference))}</dd></div>
       <div><dt>Responsable</dt><dd>{close.responsible}</dd></div><div><dt>Observaciones</dt><dd>{close.observations || '—'}</dd></div>

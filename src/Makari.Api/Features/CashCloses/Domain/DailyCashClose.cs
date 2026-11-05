@@ -5,7 +5,7 @@ public sealed class DailyCashClose
     private DailyCashClose() { }
 
     public DailyCashClose(DateOnly businessDate, Guid idempotencyKey, string requestFingerprint,
-        decimal openingCash, decimal cashSales, decimal transferSales, decimal totalRevenue, int salesCount,
+        decimal openingCash, decimal cashSales, decimal transferSales, decimal cardSales, decimal totalRevenue, int salesCount,
         decimal expectedCash, decimal countedCash, decimal difference, string responsible,
         string? observations, DateTimeOffset closedAtUtc)
     {
@@ -22,6 +22,7 @@ public sealed class DailyCashClose
         OpeningCash = openingCash;
         CashSales = cashSales;
         TransferSales = transferSales;
+        CardSales = cardSales;
         TotalRevenue = totalRevenue;
         SalesCount = salesCount;
         ExpectedCash = expectedCash;
@@ -40,6 +41,7 @@ public sealed class DailyCashClose
     public decimal OpeningCash { get; private set; }
     public decimal CashSales { get; private set; }
     public decimal TransferSales { get; private set; }
+    public decimal CardSales { get; private set; }
     public decimal TotalRevenue { get; private set; }
     public int SalesCount { get; private set; }
     public decimal ExpectedCash { get; private set; }

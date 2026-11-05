@@ -16,6 +16,7 @@ public sealed record DailyCashCloseResponse(
     decimal OpeningCash,
     decimal CashSales,
     decimal TransferSales,
+    decimal CardSales,
     decimal TotalRevenue,
     int SalesCount,
     decimal ExpectedCash,

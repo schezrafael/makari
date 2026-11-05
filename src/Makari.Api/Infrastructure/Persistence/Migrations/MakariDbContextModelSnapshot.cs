@@ -30,6 +30,12 @@ namespace Makari.Api.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly>("BusinessDate")
                         .HasColumnType("date");
 
+                    b.Property<decimal>("CardSales")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(28, 2)
+                        .HasColumnType("numeric(28,2)")
+                        .HasDefaultValue(0m);
+
                     b.Property<decimal>("CashSales")
                         .HasPrecision(28, 2)
                         .HasColumnType("numeric(28,2)");
@@ -216,7 +222,7 @@ namespace Makari.Api.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_Sales_CustomerType_Valid", "\"CustomerType\" IN (0, 1)");
 
-                            t.HasCheckConstraint("CK_Sales_PaymentMethod_Valid", "\"PaymentMethod\" IN (0, 1)");
+                            t.HasCheckConstraint("CK_Sales_PaymentMethod_Valid", "\"PaymentMethod\" IN (0, 1, 2)");
 
                             t.HasCheckConstraint("CK_Sales_Total_Positive", "\"Total\" > 0");
                         });

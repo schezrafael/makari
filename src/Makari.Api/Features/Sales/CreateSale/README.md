@@ -98,3 +98,7 @@ Pendiente contra PostgreSQL: aplicar la migración en una base de pruebas, verif
 bloqueo advisory con dos procesos API, solicitudes concurrentes de igual/distinto importe,
 respuesta perdida después del commit (venta o rechazo), reinicio de procesos y conservación
 de la clave terminal. No se modificaron precios ni datos de PostgreSQL en M0.7.
+
+M1.1: `paymentMethod` accepts `Cash`, `Transfer`, or `Card` (JSON strings).
+Card uses the same pricing, expectedTotal validation and idempotency rules; its persisted
+integer is 2, while Cash=0 and Transfer=1 remain unchanged. No bank terminal integration.

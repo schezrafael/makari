@@ -11,7 +11,7 @@ the configured zone's daylight-saving rules. Invalid calendar dates or non-ISO d
 strings return HTTP 400.
 
 The response contains `date`, `timeZoneId`, `salesCount`, `totalRevenue`, `cashRevenue`,
-`transferRevenue`, `unitsSold`, and `variants`. Variant quantities and revenue aggregate
+`transferRevenue`, `cardRevenue`, `unitsSold`, and `variants`. Variant quantities and revenue aggregate
 SaleItem quantities and stored historical subtotals, joined to current product and
 variant names. Amounts use decimal. Empty days return zeros and an empty `variants` array.
 Only persisted Sales and SaleItems participate; `RejectedSaleAttempts` are not queried.
@@ -40,6 +40,7 @@ credential belongs in source control.
   "totalRevenue": 185,
   "cashRevenue": 120,
   "transferRevenue": 65,
+  "cardRevenue": 0,
   "unitsSold": 3,
   "variants": [{
     "productVariantId": "<guid>", "productName": "Cold Brew", "variantName": "Cítrico",
@@ -47,3 +48,5 @@ credential belongs in source control.
   }]
 }
 ```
+
+For Cash, Transfer and Card, `totalRevenue = cashRevenue + transferRevenue + cardRevenue`.

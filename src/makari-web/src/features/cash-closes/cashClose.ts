@@ -22,6 +22,7 @@ export type CashClose = CashCloseRequest & {
   closedAtUtc: string
   cashSales: number
   transferSales: number
+  cardSales: number
   totalRevenue: number
   salesCount: number
   expectedCash: number
@@ -81,7 +82,7 @@ function validRequest(value: unknown): value is Record<string, unknown> & CashCl
 
 export function isCashClose(value: unknown): value is CashClose {
   if (!validRequest(value) || !isRecord(value) || !isUuid(value.id) || typeof value.closedAtUtc !== 'string' || !Number.isFinite(Date.parse(value.closedAtUtc))) return false
-  return ['cashSales', 'transferSales', 'totalRevenue', 'salesCount', 'expectedCash', 'difference']
+  return ['cashSales', 'transferSales', 'cardSales', 'totalRevenue', 'salesCount', 'expectedCash', 'difference']
     .every(key => typeof value[key] === 'number' && Number.isFinite(value[key]))
     && Number.isInteger(value.salesCount) && Number(value.salesCount) >= 0
 }
@@ -118,8 +119,10 @@ export function restoreCashClose(storage: CloseStorage): CashCloseState {
     state.attempt = request
   }
   if (value.receipt !== undefined) {
-    if (!isCashClose(value.receipt) || value.attempt !== undefined) throw new Error('El comprobante de cierre guardado no es válido.')
-    state.receipt = value.receipt
+    const receipt = isRecord(value.receipt) && !('cardSales' in value.receipt)
+      ? { ...value.receipt, cardSales: 0 } : value.receipt
+    if (!isCashClose(receipt) || value.attempt !== undefined) throw new Error('El comprobante de cierre guardado no es válido.')
+    state.receipt = receipt
   }
   return state
 }
@@ -164,7 +167,7 @@ export function completeCashClose(storage: CloseStorage, state: CashCloseState, 
     || receipt.countedCash !== state.attempt.countedCash || receipt.responsible !== state.attempt.responsible
     || receipt.observations !== state.attempt.observations
     || receipt.expectedCash !== receipt.openingCash + receipt.cashSales
-    || receipt.totalRevenue !== receipt.cashSales + receipt.transferSales
+    || Math.round(receipt.totalRevenue * 100) !== Math.round(receipt.cashSales * 100) + Math.round(receipt.transferSales * 100) + Math.round(receipt.cardSales * 100)
     || receipt.difference !== receipt.countedCash - receipt.expectedCash)
     throw new Error('La API no confirmó el cierre solicitado. Conserva el intento para reintentarlo.')
   const next: CashCloseState = { version: 1, draft: emptyCashClose(receipt.businessDate).draft, receipt }

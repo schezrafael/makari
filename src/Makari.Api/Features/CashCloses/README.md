@@ -24,9 +24,9 @@ Content-Type: application/json
 
 The request contains no sales totals. The API aggregates persisted `Sales` over the
 business-date UTC interval and stores these immutable snapshots: `CashSales`,
-`TransferSales`, `TotalRevenue`, `SalesCount`, `OpeningCash`, `ExpectedCash`,
+`TransferSales`, `CardSales`, `TotalRevenue`, `SalesCount`, `OpeningCash`, `ExpectedCash`,
 `CountedCash`, and `Difference`. `ExpectedCash = OpeningCash + CashSales`;
-`Difference = CountedCash - ExpectedCash`. Transfer revenue is excluded from the
+`Difference = CountedCash - ExpectedCash`. Transfer and Card revenue are excluded from the
 physical cash calculation. Amounts use decimal values and permit zero for both cash inputs.
 
 - 201: new confirmed close with its receipt.
@@ -94,3 +94,7 @@ dotnet test MakariPOS.slnx --filter FullyQualifiedName~PostgreSqlCashCloseTests
 The test fixture refuses any database other than `makari_test`, checks for pending
 migrations, labels its records `M0.9-TEST`, and cleans rows by generated IDs/keys. Do not
 apply this migration or run these tests against `makari_dev`.
+
+M1.1 adds `cardSales` to POST and both GET responses. Confirmed historical snapshots
+receive zero for this new column without recalculating any original amount.
+`TotalRevenue = CashSales + TransferSales + CardSales`. See [M1.1 migration instructions](../../../../docs/M1.1-card-payment.md).

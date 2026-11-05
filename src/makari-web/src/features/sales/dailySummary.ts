@@ -5,6 +5,7 @@ export type DailySummary = {
   totalRevenue: number
   cashRevenue: number
   transferRevenue: number
+  cardRevenue: number
   unitsSold: number
   variants: { productVariantId: string; productName: string; variantName: string; quantity: number; revenue: number }[]
 }
@@ -13,7 +14,7 @@ export function isDailySummary(value: unknown): value is DailySummary {
   if (!value || typeof value !== 'object') return false
   const item = value as Record<string, unknown>
   return typeof item.date === 'string' && typeof item.timeZoneId === 'string'
-    && ['salesCount', 'totalRevenue', 'cashRevenue', 'transferRevenue', 'unitsSold'].every(key => typeof item[key] === 'number' && Number.isFinite(item[key]))
+    && ['salesCount', 'totalRevenue', 'cashRevenue', 'transferRevenue', 'cardRevenue', 'unitsSold'].every(key => typeof item[key] === 'number' && Number.isFinite(item[key]))
     && Array.isArray(item.variants) && item.variants.every(variant => {
       if (!variant || typeof variant !== 'object') return false
       const line = variant as Record<string, unknown>

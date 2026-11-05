@@ -50,7 +50,7 @@ public sealed class CreateDailyCashCloseHandler(MakariDbContext context, IConfig
         var expectedCash = checked(request.OpeningCash + totals.CashSales);
         var difference = checked(request.CountedCash - expectedCash);
         var close = new DailyCashClose(request.BusinessDate, request.IdempotencyKey, fingerprint,
-            request.OpeningCash, totals.CashSales, totals.TransferSales, totals.TotalRevenue, totals.SalesCount,
+            request.OpeningCash, totals.CashSales, totals.TransferSales, totals.CardSales, totals.TotalRevenue, totals.SalesCount,
             expectedCash, request.CountedCash, difference, request.Responsible,
             request.Observations, DateTimeOffset.UtcNow);
         context.DailyCashCloses.Add(close);
@@ -97,7 +97,8 @@ public sealed class CreateDailyCashCloseHandler(MakariDbContext context, IConfig
                 .ToArray();
             return new SalesTotals(sales.Length, sales.Sum(sale => sale.Total),
                 sales.Where(sale => sale.PaymentMethod == PaymentMethod.Cash).Sum(sale => sale.Total),
-                sales.Where(sale => sale.PaymentMethod == PaymentMethod.Transfer).Sum(sale => sale.Total));
+                sales.Where(sale => sale.PaymentMethod == PaymentMethod.Transfer).Sum(sale => sale.Total),
+                sales.Where(sale => sale.PaymentMethod == PaymentMethod.Card).Sum(sale => sale.Total));
         }
 
         var totals = await query.GroupBy(_ => 1).Select(group => new
@@ -105,11 +106,12 @@ public sealed class CreateDailyCashCloseHandler(MakariDbContext context, IConfig
             Count = group.Count(),
             Total = group.Sum(sale => sale.Total),
             Cash = group.Where(sale => sale.PaymentMethod == PaymentMethod.Cash).Sum(sale => (decimal?)sale.Total),
-            Transfer = group.Where(sale => sale.PaymentMethod == PaymentMethod.Transfer).Sum(sale => (decimal?)sale.Total)
+            Transfer = group.Where(sale => sale.PaymentMethod == PaymentMethod.Transfer).Sum(sale => (decimal?)sale.Total),
+            Card = group.Where(sale => sale.PaymentMethod == PaymentMethod.Card).Sum(sale => (decimal?)sale.Total)
         }).SingleOrDefaultAsync(cancellationToken);
         return totals is null
-            ? new SalesTotals(0, 0m, 0m, 0m)
-            : new SalesTotals(totals.Count, totals.Total, totals.Cash ?? 0m, totals.Transfer ?? 0m);
+            ? new SalesTotals(0, 0m, 0m, 0m, 0m)
+            : new SalesTotals(totals.Count, totals.Total, totals.Cash ?? 0m, totals.Transfer ?? 0m, totals.Card ?? 0m);
     }
 
     private (DateTimeOffset StartUtc, DateTimeOffset EndUtc) DayBounds(DateOnly date) =>
@@ -143,8 +145,8 @@ public sealed class CreateDailyCashCloseHandler(MakariDbContext context, IConfig
 
     internal static DailyCashCloseResponse ToResponse(DailyCashClose close) => new(
         close.Id, close.BusinessDate, close.ClosedAtUtc, close.IdempotencyKey, close.OpeningCash,
-        close.CashSales, close.TransferSales, close.TotalRevenue, close.SalesCount, close.ExpectedCash,
+        close.CashSales, close.TransferSales, close.CardSales, close.TotalRevenue, close.SalesCount, close.ExpectedCash,
         close.CountedCash, close.Difference, close.Responsible, close.Observations);
 
-    private sealed record SalesTotals(int SalesCount, decimal TotalRevenue, decimal CashSales, decimal TransferSales);
+    private sealed record SalesTotals(int SalesCount, decimal TotalRevenue, decimal CashSales, decimal TransferSales, decimal CardSales);
 }

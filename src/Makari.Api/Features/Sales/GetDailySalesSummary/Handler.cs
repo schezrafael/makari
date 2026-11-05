@@ -39,7 +39,8 @@ public sealed class GetDailySalesSummaryHandler
                 Count = group.Count(),
                 Revenue = group.Sum(sale => sale.Total),
                 Cash = group.Where(sale => sale.PaymentMethod == PaymentMethod.Cash).Sum(sale => (decimal?)sale.Total),
-                Transfer = group.Where(sale => sale.PaymentMethod == PaymentMethod.Transfer).Sum(sale => (decimal?)sale.Total)
+                Transfer = group.Where(sale => sale.PaymentMethod == PaymentMethod.Transfer).Sum(sale => (decimal?)sale.Total),
+                Card = group.Where(sale => sale.PaymentMethod == PaymentMethod.Card).Sum(sale => (decimal?)sale.Total)
             })
             .SingleOrDefaultAsync(cancellationToken);
 
@@ -74,6 +75,7 @@ public sealed class GetDailySalesSummaryHandler
             totals?.Revenue ?? 0m,
             totals?.Cash ?? 0m,
             totals?.Transfer ?? 0m,
+            totals?.Card ?? 0m,
             variants.Sum(item => item.Quantity),
             variants);
     }
@@ -102,6 +104,7 @@ public sealed class GetDailySalesSummaryHandler
         return new GetDailySalesSummaryResponse(date, _timeZone.Id, sales.Length, sales.Sum(sale => sale.Total),
             sales.Where(sale => sale.PaymentMethod == PaymentMethod.Cash).Sum(sale => sale.Total),
             sales.Where(sale => sale.PaymentMethod == PaymentMethod.Transfer).Sum(sale => sale.Total),
+            sales.Where(sale => sale.PaymentMethod == PaymentMethod.Card).Sum(sale => sale.Total),
             variants.Sum(item => item.Quantity), variants);
     }
 

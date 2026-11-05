@@ -14,7 +14,7 @@ public sealed class GetDailyCashCloseHandler(MakariDbContext context, IConfigura
     public Task<DailyCashCloseResponse?> ByDateAsync(DateOnly date, CancellationToken cancellationToken) =>
         context.DailyCashCloses.AsNoTracking().Where(close => close.BusinessDate == date)
             .Select(close => new DailyCashCloseResponse(close.Id, close.BusinessDate, close.ClosedAtUtc,
-                close.IdempotencyKey, close.OpeningCash, close.CashSales, close.TransferSales,
+                close.IdempotencyKey, close.OpeningCash, close.CashSales, close.TransferSales, close.CardSales,
                 close.TotalRevenue, close.SalesCount, close.ExpectedCash, close.CountedCash,
                 close.Difference, close.Responsible, close.Observations))
             .SingleOrDefaultAsync(cancellationToken);

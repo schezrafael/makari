@@ -1,5 +1,5 @@
 export type CustomerType = 'Local' | 'Visitor'
-export type PaymentMethod = 'Cash' | 'Transfer'
+export type PaymentMethod = 'Cash' | 'Transfer' | 'Card'
 export type Variant = { id: string; name: string; sizeMl: number; price: number }
 export type Product = { id: string; name: string; category: string; variants: Variant[] }
 export type Cart = Record<string, number>

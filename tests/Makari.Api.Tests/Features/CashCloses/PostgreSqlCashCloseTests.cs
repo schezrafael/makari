@@ -134,6 +134,86 @@ public sealed class PostgreSqlCashCloseTests
     }
 
     [PostgreSqlCashCloseFact]
+    public async Task CardSale_IsPersistedReplayedAndIncludedInSummaryAndClose()
+    {
+        var connectionString = TestConnection();
+        using var factory = new PostgreSqlCashCloseApiFactory(connectionString);
+        using var client = factory.CreateClient();
+        await AssertReadyAsync(factory);
+        var before = (await client.GetFromJsonAsync<GetDailySalesSummaryResponse>("/api/sales/summary"))!;
+        using (var existing = await client.GetAsync($"/api/cash-closes?date={before.Date:yyyy-MM-dd}"))
+            Assert.Equal(HttpStatusCode.NotFound, existing.StatusCode);
+
+        var testId = Guid.NewGuid();
+        var product = new Product($"M1.1-CARD-TEST-{testId:N}", "Integration test");
+        var variant = product.AddVariant("Race variant", 300);
+        variant.AddPrice(CustomerType.Visitor, 61m);
+        var saleKey = Guid.NewGuid();
+        var closeKey = Guid.NewGuid();
+        var seeded = false;
+        try
+        {
+            using (var scope = factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<MakariDbContext>();
+                db.Products.Add(product);
+                await db.SaveChangesAsync();
+                seeded = true;
+            }
+
+            var saleRequest = new
+            {
+                idempotencyKey = saleKey, customerType = "Visitor", paymentMethod = "Card", expectedTotal = 61m,
+                items = new[] { new { productVariantId = variant.Id, quantity = 1 } }
+            };
+            var closeRequest = Request(closeKey, before.Date, "M0.9 race test");
+            using var saleResponse = await client.PostAsJsonAsync("/api/sales", saleRequest);
+            Assert.Equal(HttpStatusCode.Created, saleResponse.StatusCode);
+            using var original = JsonDocument.Parse(await saleResponse.Content.ReadAsStringAsync());
+            Assert.Equal("Card", original.RootElement.GetProperty("paymentMethod").GetString());
+            using var restarted = new PostgreSqlCashCloseApiFactory(connectionString);
+            using var restartedClient = restarted.CreateClient();
+            using var retry = await restartedClient.PostAsJsonAsync("/api/sales", saleRequest);
+            Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+            using var replay = JsonDocument.Parse(await retry.Content.ReadAsStringAsync());
+            Assert.Equal(original.RootElement.GetProperty("id").GetGuid(), replay.RootElement.GetProperty("id").GetGuid());
+            var summary = (await restartedClient.GetFromJsonAsync<GetDailySalesSummaryResponse>("/api/sales/summary"))!;
+            Assert.Equal(before.CardRevenue + 61m, summary.CardRevenue);
+            Assert.Equal(before.TotalRevenue + 61m, summary.TotalRevenue);
+            Assert.Equal(summary.TotalRevenue, summary.CashRevenue + summary.TransferRevenue + summary.CardRevenue);
+            using var closeResponse = await restartedClient.PostAsJsonAsync("/api/cash-closes", closeRequest);
+            Assert.Equal(HttpStatusCode.Created, closeResponse.StatusCode);
+            var close = (await closeResponse.Content.ReadFromJsonAsync<DailyCashCloseResponse>())!;
+            Assert.Equal(summary.CardRevenue, close.CardSales);
+            Assert.Equal(summary.TotalRevenue, close.TotalRevenue);
+            Assert.Equal(close.OpeningCash + summary.CashRevenue, close.ExpectedCash);
+            Assert.Equal(close.TotalRevenue, close.CashSales + close.TransferSales + close.CardSales);
+
+        }
+        finally
+        {
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<MakariDbContext>();
+            if (seeded)
+            {
+                var sales = await db.Sales.Where(sale => sale.IdempotencyKey == saleKey).ToListAsync();
+                db.Sales.RemoveRange(sales);
+                var rejected = await db.Set<RejectedSaleAttempt>().Where(attempt => attempt.IdempotencyKey == saleKey).ToListAsync();
+                db.Set<RejectedSaleAttempt>().RemoveRange(rejected);
+                var closes = await db.DailyCashCloses.Where(close => close.IdempotencyKey == closeKey).ToListAsync();
+                db.DailyCashCloses.RemoveRange(closes);
+                var prices = await db.ProductPrices.Where(price => price.ProductVariant.ProductId == product.Id).ToListAsync();
+                db.ProductPrices.RemoveRange(prices);
+                var variants = await db.ProductVariants.Where(row => row.ProductId == product.Id).ToListAsync();
+                db.ProductVariants.RemoveRange(variants);
+                var products = await db.Products.Where(row => row.Id == product.Id).ToListAsync();
+                db.Products.RemoveRange(products);
+                await db.SaveChangesAsync();
+            }
+        }
+    }
+
+    [PostgreSqlCashCloseFact]
     public async Task IdenticalRetryAfterApiHostRestart_ReturnsThePersistedReceipt()
     {
         var connectionString = TestConnection();

@@ -53,7 +53,7 @@ No se desactiva la validación de certificados ni se configura CORS.
   Devuelve `{ customerType, subtotal, discount, total, items }` con desglose por línea;
   no crea ventas. Ver [contrato completo](../Makari.Api/Features/Sales/QuoteSale/README.md).
 - `POST /api/sales`: `{ idempotencyKey, customerType: "Local"|"Visitor",
-  paymentMethod: "Cash"|"Transfer", expectedTotal, items: [{ productVariantId, quantity }] }`.
+  paymentMethod: "Cash"|"Transfer"|"Card", expectedTotal, items: [{ productVariantId, quantity }] }`.
 - Respuesta `201` nueva / `200` repetida: `{ id, createdAtUtc, customerType,
   paymentMethod, total, registeredBy, idempotencyKey,
   items: [{ id, productVariantId, quantity, unitPrice, subtotal }] }`.
@@ -198,3 +198,7 @@ DOM del cierre (edición, foco, GET, errores 404, fechas, respuestas tardías, c
 y recuperación). En Chrome, con API simulada porque el proxy del entorno devolvía 502,
 se escribió por tecla fondo 300 y conteo 400 con ventas Cash 50: esperado 350 y diferencia
 50, sin loading ni GET adicionales. No se confirmaron cierres contra datos comerciales.
+
+M1.1 incorpora Tarjeta en nueva venta, resumen y cierre. Los borradores y POST pendientes
+conservan Card y su clave al recargar. `cardRevenue` y `cardSales` muestran el ingreso
+electrónico separado; solo Cash se suma al fondo inicial para el efectivo esperado.

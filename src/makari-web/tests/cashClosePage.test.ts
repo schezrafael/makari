@@ -13,7 +13,7 @@ const { createRoot } = await import('react-dom/client')
 const { default: CashClosePage } = await import('../src/features/cash-closes/CashClosePage.tsx')
 let root: ReturnType<typeof createRoot>
 const date = '2026-10-28'
-const summary = (day = date) => ({ date: day, timeZoneId: 'America/Mexico_City', salesCount: 2, totalRevenue: 80, cashRevenue: 50, transferRevenue: 30, unitsSold: 2, variants: [] })
+const summary = (day = date) => ({ date: day, timeZoneId: 'America/Mexico_City', salesCount: 2, totalRevenue: 120, cashRevenue: 50, transferRevenue: 30, cardRevenue: 40, unitsSold: 2, variants: [] })
 const missing = () => Response.json({ code: 'cash_close_not_found' }, { status: 404 })
 const input = (name: string) => document.querySelector<HTMLInputElement>(`input[aria-label="${name}"]`)!
 const dateInput = () => document.querySelector<HTMLInputElement>('input[type=date]')!
@@ -31,7 +31,7 @@ async function edit(element: HTMLInputElement | HTMLTextAreaElement, value: stri
     element.dispatchEvent(new dom.window.Event('change', { bubbles: true }))
   })
 }
-const receipt = (request: ReturnType<typeof prepareCashCloseAttempt>['attempt']) => ({ ...request!, id: '11111111-1111-4111-8111-111111111111', closedAtUtc: '2026-10-28T12:00:00Z', cashSales: 50, transferSales: 30, totalRevenue: 80, salesCount: 2, expectedCash: request!.openingCash + 50, difference: request!.countedCash - request!.openingCash - 50 })
+const receipt = (request: ReturnType<typeof prepareCashCloseAttempt>['attempt']) => ({ ...request!, id: '11111111-1111-4111-8111-111111111111', closedAtUtc: '2026-10-28T12:00:00Z', cashSales: 50, transferSales: 30, cardSales: 40, totalRevenue: 120, salesCount: 2, expectedCash: request!.openingCash + 50, difference: request!.countedCash - request!.openingCash - 50 })
 afterEach(async () => {
   if (root) await act(async () => root.unmount())
   localStorage.clear()
@@ -130,6 +130,7 @@ test('POST incierto conserva clave tras remontar y reintenta mostrando comproban
   await act(async () => document.querySelector<HTMLButtonElement>('.cash-close-actions button')!.click())
   assert.deepEqual(requests, [pending.attempt, pending.attempt])
   assert.ok(content().includes('Caja cerrada'))
+  assert.ok(content().includes('Tarjeta'))
   assert.equal(restoreCashClose(localStorage).receipt?.idempotencyKey, pending.attempt!.idempotencyKey)
   assert.equal(restoreCashClose(localStorage).attempt, undefined)
 })
@@ -143,6 +144,7 @@ test('GET recupera intento confirmado y comprobante solo lectura permite cambiar
   })
   await mount()
   assert.ok(content().includes('Caja cerrada'))
+  assert.ok(content().includes('Tarjeta'))
   assert.equal(input('Fondo inicial en pesos'), null)
   assert.equal(JSON.parse(localStorage.getItem(cashCloseStorageKey)!).attempt, undefined)
   await edit(dateInput(), '2026-10-27')
@@ -180,6 +182,7 @@ test('confirmar un nuevo cierre persiste request antes del POST y muestra el com
   assert.ok(document.querySelector('dialog')!.hasAttribute('open'))
   await act(async () => document.querySelector<HTMLButtonElement>('dialog .primary')!.click())
   assert.ok(content().includes('Caja cerrada'))
+  assert.ok(content().includes('Tarjeta'))
   assert.equal(restoreCashClose(localStorage).receipt?.openingCash, 300)
   assert.equal(input('Fondo inicial en pesos'), null)
 })

@@ -32,6 +32,7 @@ export default function DailySalesPage() {
         <MetricCard label="Ventas registradas">{summary.salesCount}</MetricCard>
         <MetricCard label="Efectivo"><MoneyDisplay value={summary.cashRevenue} /></MetricCard>
         <MetricCard label="Transferencias"><MoneyDisplay value={summary.transferRevenue} /></MetricCard>
+        <MetricCard label="Tarjeta"><MoneyDisplay value={summary.cardRevenue} /></MetricCard>
       </section>
       <section className="summary-variants" aria-labelledby="variants-title"><h2 id="variants-title">Bebidas vendidas <span className="badge">{summary.unitsSold} unidades</span></h2>
         {summary.variants.length === 0 ? <div className="summary-empty"><span aria-hidden="true">✳</span><p>No hay ventas registradas para esta fecha.</p></div> : <ul>{summary.variants.map(variant => <li key={variant.productVariantId}><div><strong>{variant.productName} · {variant.variantName}</strong><span>{variant.quantity} {variant.quantity === 1 ? 'unidad' : 'unidades'}</span></div><strong>{currency(variant.revenue)}</strong></li>)}</ul>}

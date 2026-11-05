@@ -18,7 +18,7 @@ const amount = (value: unknown): value is number => typeof value === 'number' &&
 
 function validRequest(value: unknown): value is SaleRequest {
   return object(value) && uuid(value.idempotencyKey) && amount(value.expectedTotal) &&
-    ['Local', 'Visitor'].includes(String(value.customerType)) && ['Cash', 'Transfer'].includes(String(value.paymentMethod)) &&
+    ['Local', 'Visitor'].includes(String(value.customerType)) && ['Cash', 'Transfer', 'Card'].includes(String(value.paymentMethod)) &&
     Array.isArray(value.items) && value.items.length > 0 && value.items.every(item => object(item) && uuid(item.productVariantId) && quantity(item.quantity)) &&
     new Set(value.items.map(item => item.productVariantId)).size === value.items.length &&
     Object.keys(value).every(key => ['customerType', 'paymentMethod', 'items', 'idempotencyKey', 'expectedTotal'].includes(key)) &&
@@ -32,7 +32,7 @@ export function restoreCheckout(storage: CheckoutStorage): Checkout {
   try { value = JSON.parse(raw) }
   catch { throw new Error('El borrador guardado no se puede leer. No se ha borrado; revisa el almacenamiento antes de cobrar.') }
   if (!object(value) || value.version !== 1 || !object(value.draft) || !object(value.draft.cart) ||
-    typeof value.draft.localDiscount !== 'boolean' || !['Cash', 'Transfer'].includes(String(value.draft.payment)) ||
+    typeof value.draft.localDiscount !== 'boolean' || !['Cash', 'Transfer', 'Card'].includes(String(value.draft.payment)) ||
     !Object.entries(value.draft.cart).every(([id, count]) => uuid(id) && quantity(count)))
     throw new Error('El borrador guardado es inválido o usa otra versión. No se ha borrado; revisa el almacenamiento antes de cobrar.')
   const draft: Draft = { cart: { ...value.draft.cart } as Cart, localDiscount: value.draft.localDiscount, payment: value.draft.payment as PaymentMethod }

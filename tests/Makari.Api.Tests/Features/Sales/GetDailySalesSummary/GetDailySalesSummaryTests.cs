@@ -28,6 +28,7 @@ public sealed class GetDailySalesSummaryTests
         Assert.Equal(0m, body.GetProperty("totalRevenue").GetDecimal());
         Assert.Equal(0m, body.GetProperty("cashRevenue").GetDecimal());
         Assert.Equal(0m, body.GetProperty("transferRevenue").GetDecimal());
+        Assert.Equal(0m, body.GetProperty("cardRevenue").GetDecimal());
         Assert.Equal(0, body.GetProperty("unitsSold").GetInt64());
         Assert.Empty(body.GetProperty("variants").EnumerateArray());
     }

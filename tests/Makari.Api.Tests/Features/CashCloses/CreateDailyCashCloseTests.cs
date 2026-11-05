@@ -16,6 +16,37 @@ namespace Makari.Api.Tests.Features.CashCloses;
 public sealed class CreateDailyCashCloseTests
 {
     [Fact]
+    public async Task HistoricalSnapshotWithoutCardSales_DefaultsToZeroAndKeepsOriginalAmounts()
+    {
+        using var factory = new CatalogApiFactory();
+        await factory.InitializeAsync();
+        var id = Guid.NewGuid();
+        var key = Guid.NewGuid();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MakariDbContext>();
+            // Simulate an old writer: omit CardSales and retain the confirmed snapshot.
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO DailyCashCloses
+                (Id, BusinessDate, ClosedAtUtc, IdempotencyKey, RequestFingerprint,
+                 OpeningCash, CashSales, TransferSales, TotalRevenue, SalesCount,
+                 ExpectedCash, CountedCash, Difference, Responsible)
+                VALUES ({id}, {new DateOnly(2020, 1, 1)}, {DateTimeOffset.UtcNow}, {key}, {"historical"},
+                        100, 50, 30, 80, 2, 150, 145, -5, {"Andi"})
+                """);
+        }
+        using var client = factory.CreateClient();
+        var close = (await client.GetFromJsonAsync<DailyCashCloseResponse>($"/api/cash-closes/{id}"))!;
+        Assert.Equal(0m, close.CardSales);
+        Assert.Equal(50m, close.CashSales);
+        Assert.Equal(30m, close.TransferSales);
+        Assert.Equal(80m, close.TotalRevenue);
+        Assert.Equal(150m, close.ExpectedCash);
+        Assert.Equal(145m, close.CountedCash);
+        Assert.Equal(-5m, close.Difference);
+    }
+
+    [Fact]
     public async Task EmptyDay_AllowsZeroOpeningCash_AndCloseIsIdempotentAndReadable()
     {
         using var factory = new CatalogApiFactory();
@@ -95,7 +126,7 @@ public sealed class CreateDailyCashCloseTests
     [Theory]
     [InlineData(15, 90, 15)]
     [InlineData(15, 55, -20)]
-    public async Task Close_SnapshotsCashAndTransferSalesAndCalculatesDifference(
+    public async Task Close_SnapshotsAllPaymentMethodsAndCalculatesDifference(
         decimal openingCash, decimal countedCash, decimal expectedDifference)
     {
         using var factory = new CatalogApiFactory();
@@ -107,6 +138,10 @@ public sealed class CreateDailyCashCloseTests
 
         await CreateSaleAsync(client, variant.Id, PaymentMethod.Cash, 60m);
         await CreateSaleAsync(client, variant.Id, PaymentMethod.Transfer, 60m);
+        await CreateSaleAsync(client, variant.Id, PaymentMethod.Card, 60m);
+        var summary = (await client.GetFromJsonAsync<GetDailySalesSummaryResponse>("/api/sales/summary"))!;
+        Assert.Equal(60m, summary.CardRevenue);
+        Assert.Equal(summary.TotalRevenue, summary.CashRevenue + summary.TransferRevenue + summary.CardRevenue);
         var date = await BusinessTodayAsync(client);
         var request = new
         {
@@ -116,10 +151,11 @@ public sealed class CreateDailyCashCloseTests
         using var created = await client.PostAsJsonAsync("/api/cash-closes", request);
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         var close = (await created.Content.ReadFromJsonAsync<DailyCashCloseResponse>())!;
-        Assert.Equal(2, close.SalesCount);
+        Assert.Equal(3, close.SalesCount);
         Assert.Equal(60m, close.CashSales);
         Assert.Equal(60m, close.TransferSales);
-        Assert.Equal(120m, close.TotalRevenue);
+        Assert.Equal(60m, close.CardSales);
+        Assert.Equal(180m, close.TotalRevenue);
         Assert.Equal(openingCash + 60m, close.ExpectedCash);
         Assert.Equal(countedCash, close.CountedCash);
         Assert.Equal(expectedDifference, close.Difference);

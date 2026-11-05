@@ -3,5 +3,6 @@ namespace Makari.Api.Features.Sales.Domain;
 public enum PaymentMethod
 {
     Cash = 0,
-    Transfer = 1
+    Transfer = 1,
+    Card = 2
 }

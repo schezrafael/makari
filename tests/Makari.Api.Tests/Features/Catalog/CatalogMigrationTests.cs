@@ -8,6 +8,20 @@ namespace Makari.Api.Tests.Features.Catalog;
 public sealed class CatalogMigrationTests
 {
     [Fact]
+    public void Card_MigrationPreservesHistoricalSnapshotsAndPaymentValues()
+    {
+        using var context = new MakariDbContext(new DbContextOptionsBuilder<MakariDbContext>()
+            .UseNpgsql("Host=localhost;Database=makari_migration_unit_tests").Options);
+        Assert.False(context.Database.HasPendingModelChanges());
+        var sql = context.GetService<IMigrator>().GenerateScript("20261027035313_AddDailyCashCloses");
+        Assert.Contains("ADD \"CardSales\" numeric(28,2) NOT NULL DEFAULT 0.0", sql);
+        Assert.Contains("CHECK (\"PaymentMethod\" IN (0, 1, 2))", sql);
+        Assert.DoesNotContain("UPDATE ", sql);
+        Assert.DoesNotContain("DELETE ", sql);
+        Assert.DoesNotContain("DROP COLUMN", sql);
+    }
+
+    [Fact]
     public void RejectedAttempts_MigrationIsSchemaOnlyAndMatchesModel()
     {
         using var context = new MakariDbContext(new DbContextOptionsBuilder<MakariDbContext>()
@@ -25,7 +39,7 @@ public sealed class CatalogMigrationTests
     {
         using var context = new MakariDbContext(new DbContextOptionsBuilder<MakariDbContext>()
             .UseNpgsql("Host=localhost;Database=makari_migration_unit_tests").Options);
-        Assert.EndsWith("_AddDailyCashCloses", context.Database.GetMigrations().Last());
+        Assert.Contains("20261027035313_AddDailyCashCloses", context.Database.GetMigrations());
         Assert.False(context.Database.HasPendingModelChanges());
 
         var sql = context.GetService<IMigrator>().GenerateScript(

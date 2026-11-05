@@ -38,7 +38,7 @@ test('guarda request exacto antes de enviar y reintenta con la misma clave despu
   const recovered = restoreCashClose(local)
   assert.equal(recovered.attempt?.idempotencyKey, key)
   let sent: unknown
-  const close: CashClose = { id, businessDate: '2026-10-26', closedAtUtc: '2026-10-27T01:00:00Z', idempotencyKey: key, openingCash: 20, cashSales: 50, transferSales: 30, totalRevenue: 80, salesCount: 2, expectedCash: 70, countedCash: 82.5, difference: 12.5, responsible: 'Andi', observations: 'Conteo final' }
+  const close: CashClose = { id, businessDate: '2026-10-26', closedAtUtc: '2026-10-27T01:00:00Z', idempotencyKey: key, openingCash: 20, cashSales: 50, transferSales: 30, cardSales: 0, totalRevenue: 80, salesCount: 2, expectedCash: 70, countedCash: 82.5, difference: 12.5, responsible: 'Andi', observations: 'Conteo final' }
   t.mock.method(globalThis, 'fetch', async (_url: string, options: RequestInit) => {
     sent = JSON.parse(options.body as string)
     return Response.json(close, { status: 201 })
@@ -72,7 +72,24 @@ test('valida el comprobante del backend y no borra el intento ante total inconsi
   const local = storage()
   const base = emptyCashClose('2026-10-26')
   const state = prepareCashCloseAttempt(local, { ...base, draft: { ...base.draft, responsible: 'Andi', countedCash: '70' } })
-  const invalid = { id, businessDate: '2026-10-26', closedAtUtc: '2026-10-26T12:00:00Z', idempotencyKey: state.attempt!.idempotencyKey, openingCash: 0, cashSales: 50, transferSales: 0, totalRevenue: 50, salesCount: 1, expectedCash: 50, countedCash: 70, difference: 0, responsible: 'Andi', observations: null } as CashClose
+  const invalid = { id, businessDate: '2026-10-26', closedAtUtc: '2026-10-26T12:00:00Z', idempotencyKey: state.attempt!.idempotencyKey, openingCash: 0, cashSales: 50, transferSales: 0, cardSales: 0, totalRevenue: 50, salesCount: 1, expectedCash: 50, countedCash: 70, difference: 0, responsible: 'Andi', observations: null } as CashClose
   assert.throws(() => completeCashClose(local, state, invalid), /no confirmó/)
   assert.equal(restoreCashClose(local).attempt?.idempotencyKey, state.attempt?.idempotencyKey)
+})
+
+test('restaura comprobante histórico sin cardSales conservando importes', () => {
+  const key = crypto.randomUUID()
+  const state = emptyCashClose('2020-01-01')
+  const receipt = { id, businessDate: '2020-01-01', closedAtUtc: '2020-01-02T01:00:00Z', idempotencyKey: key, openingCash: 20, cashSales: 50, transferSales: 30, totalRevenue: 80, salesCount: 2, expectedCash: 70, countedCash: 82.5, difference: 12.5, responsible: 'Andi', observations: null }
+  const db = storage()
+  db.setItem(cashCloseStorageKey, JSON.stringify({ ...state, receipt }))
+  assert.deepEqual(restoreCashClose(db).receipt, { ...receipt, cardSales: 0 })
+})
+
+test('confirma ingresos de tres métodos con centavos sin error de coma flotante', () => {
+  const local = storage()
+  const base = emptyCashClose('2026-10-26')
+  const state = prepareCashCloseAttempt(local, { ...base, draft: { ...base.draft, responsible: 'Andi', countedCash: '0.10' } })
+  const receipt: CashClose = { ...state.attempt!, id, closedAtUtc: '2026-10-27T01:00:00Z', cashSales: 0.1, transferSales: 0.2, cardSales: 0.3, totalRevenue: 0.6, salesCount: 3, expectedCash: 0.1, difference: 0 }
+  assert.equal(completeCashClose(local, state, receipt).receipt?.totalRevenue, 0.6)
 })

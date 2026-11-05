@@ -18,6 +18,37 @@ public sealed class CreateSaleTests
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
 
     [Fact]
+    public async Task Card_PersistsAndReplaysWithoutChangingExpectedTotalRules()
+    {
+        using var factory = new CatalogApiFactory();
+        var product = ProductWithPrices(out var variant, out _);
+        await factory.InitializeAsync(product);
+        using var client = factory.CreateClient();
+        var request = NewRequest(variant.Id, 1) with { PaymentMethod = PaymentMethod.Card };
+        using var first = await PostAsync(client, request);
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        var original = (await first.Content.ReadFromJsonAsync<CreateSaleResponse>(JsonOptions))!;
+        Assert.Equal(PaymentMethod.Card, original.PaymentMethod);
+        using var retry = await PostAsync(client, request);
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+        Assert.Equal(original.Id, (await retry.Content.ReadFromJsonAsync<CreateSaleResponse>(JsonOptions))!.Id);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<MakariDbContext>();
+        Assert.Equal(PaymentMethod.Card, (await db.Sales.AsNoTracking().SingleAsync()).PaymentMethod);
+        using var wrongTotal = await PostAsync(client, request with { IdempotencyKey = Guid.NewGuid(), ExpectedTotal = 1m });
+        Assert.Equal(HttpStatusCode.Conflict, wrongTotal.StatusCode);
+        using var unknown = await client.PostAsJsonAsync("/api/sales", new
+        {
+            idempotencyKey = Guid.NewGuid(), customerType = "Visitor", paymentMethod = "Unknown",
+            expectedTotal = 60m, items = new[] { new { productVariantId = variant.Id, quantity = 1 } }
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, unknown.StatusCode);
+        Assert.Equal(0, (int)PaymentMethod.Cash);
+        Assert.Equal(1, (int)PaymentMethod.Transfer);
+        Assert.Equal(2, (int)PaymentMethod.Card);
+    }
+
+    [Fact]
     public async Task CreateSale_ValidSaleUsesCatalogPriceAndConfiguredOperator()
     {
         using var factory = new CatalogApiFactory();

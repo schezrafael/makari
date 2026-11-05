@@ -23,6 +23,7 @@ public sealed class DailyCashCloseConfiguration : IEntityTypeConfiguration<Daily
         builder.Property(close => close.OpeningCash).HasPrecision(28, 2).IsRequired();
         builder.Property(close => close.CashSales).HasPrecision(28, 2).IsRequired();
         builder.Property(close => close.TransferSales).HasPrecision(28, 2).IsRequired();
+        builder.Property(close => close.CardSales).HasPrecision(28, 2).HasDefaultValue(0m).IsRequired();
         builder.Property(close => close.TotalRevenue).HasPrecision(28, 2).IsRequired();
         builder.Property(close => close.SalesCount).IsRequired();
         builder.Property(close => close.ExpectedCash).HasPrecision(28, 2).IsRequired();
