@@ -5,7 +5,7 @@ las configuraciones Fluent API; el contexto las registra desde el ensamblado.
 
 - Crear productos con `new Product(name, category)`, variantes con `AddVariant`
   y precios con `AddPrice`. Los identificadores se generan en el dominio.
-- Nombres y categoría obligatorios, volumen positivo e importes positivos
+- Nombres y categoría obligatorios, volumen positivo e importes no negativos
   representables en `decimal(12,2)` sin redondeo.
 - `CustomerType` se almacena como entero estable: Local = 0, Visitor = 1.
 - `AddPrice` rechaza tipos duplicados en la colección cargada. Al usarlo sobre una
@@ -29,3 +29,6 @@ M0.2.2 incorpora la migración `InitialCatalog` y un comando explícito de seed.
 Consultar [INITIALIZATION.md](INITIALIZATION.md) para el destino, autorización,
 identificadores estables y procedimiento de aplicación. El arranque normal
 de la API sigue sin modificar el esquema ni inicializar datos.
+
+M1.3 agrega [administración de catálogo](../../../../docs/M1.3-product-catalog.md),
+versionado, precios editables y validaciones de duplicados. Requiere ManageCatalog.

@@ -29,5 +29,16 @@ public sealed class Product
         return variant;
     }
 
+    public Guid Version { get; private set; } = Guid.NewGuid();
+
+    public void Revise() => Version = Guid.NewGuid();
+
+    public void Update(string name, bool isActive)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        Name = name.Trim();
+        IsActive = isActive;
+    }
+
     public void Deactivate() => IsActive = false;
 }

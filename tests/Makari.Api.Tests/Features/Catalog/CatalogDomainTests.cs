@@ -63,7 +63,7 @@ public sealed class CatalogDomainTests
 
     public static TheoryData<decimal> InvalidAmounts => new()
     {
-        0m, -0.01m, -100m, 0.001m, 12.345m, 10_000_000_000m, decimal.MaxValue
+        -0.01m, -100m, 0.001m, 12.345m, 10_000_000_000m, decimal.MaxValue
     };
 
     [Theory]
@@ -75,7 +75,7 @@ public sealed class CatalogDomainTests
         Assert.Empty(variant.Prices);
     }
 
-    public static TheoryData<decimal> ValidAmounts => new() { 0.01m, 40m, 40.120m, 9_999_999_999.99m };
+    public static TheoryData<decimal> ValidAmounts => new() { 0m, 0.01m, 40m, 40.120m, 9_999_999_999.99m };
 
     [Theory]
     [MemberData(nameof(ValidAmounts))]

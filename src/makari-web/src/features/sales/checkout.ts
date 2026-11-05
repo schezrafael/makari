@@ -28,7 +28,7 @@ export function buyerUsername(draft: Draft): string {
 const object = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 const uuid = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) && value !== '00000000-0000-0000-0000-000000000000'
 const quantity = (value: unknown): value is number => Number.isInteger(value) && Number(value) > 0 && Number(value) <= 999
-const amount = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0 && Number.isSafeInteger(Math.round(value * 100)) && Math.abs(value * 100 - Math.round(value * 100)) < 0.00001
+const amount = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0 && Number.isSafeInteger(Math.round(value * 100)) && Math.abs(value * 100 - Math.round(value * 100)) < 0.00001
 
 function validRequest(value: unknown): value is SaleRequest {
   return object(value) && (value.customerUsername === undefined || typeof value.customerUsername === 'string' && value.customerUsername.length <= 256)

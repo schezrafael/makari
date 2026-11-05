@@ -15,7 +15,7 @@ Content-Type: application/json
 }
 ```
 
-`expectedTotal` es obligatorio, positivo y con hasta dos decimales. Es una condición
+`expectedTotal` es obligatorio, no negativo y con hasta dos decimales. Es una condición
 para registrar, nunca un precio que el servidor acepte como autoridad. El backend
 consulta precios y calcula el total; solo registra si coincide exactamente. Se mantiene
 el JSON de respuesta de CreateSale, incluido folio, total y clave. `Sales:RegisteredBy`

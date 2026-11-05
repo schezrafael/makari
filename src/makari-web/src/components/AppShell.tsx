@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react'
 import { Button } from './ui'
 
-export type Page = 'sale' | 'summary' | 'close'
+export type Page = 'sale' | 'summary' | 'close' | 'catalog'
 const sections: { id: Page; label: string }[] = [
   { id: 'sale', label: 'Nueva venta' },
   { id: 'summary', label: 'Ventas del día' },
+  { id: 'catalog', label: 'Catálogo' },
   { id: 'close', label: 'Cierre de caja' },
 ]
 

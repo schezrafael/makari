@@ -9,6 +9,7 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
     public void Configure(EntityTypeBuilder<Product> builder)
     {
         builder.ToTable("Products");
+        builder.Property(product => product.Version).IsConcurrencyToken();
         builder.HasKey(product => product.Id);
         builder.Property(product => product.Id).ValueGeneratedNever();
         builder.Property(product => product.Name).IsRequired();

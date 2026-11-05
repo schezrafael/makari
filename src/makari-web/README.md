@@ -1,6 +1,6 @@
-# Makari POS — M0.9 Daily Cash Close
+# Makari POS — M1.3 Catálogo
 
-La navegación permite abrir Nueva venta, Ventas del día y Cierre de caja. El cierre muestra
+La navegación permite abrir Nueva venta, Ventas del día, Catálogo y Cierre de caja. El cierre muestra
 los totales del servidor, calcula efectivo esperado y diferencia, y conserva un comprobante
 inmutable después de confirmarlo.
 
@@ -208,3 +208,10 @@ Escribir no consulta la API: CreateSale resuelve/crea al confirmar. El username 
 persisten antes del POST, y el formulario se bloquea durante un resultado incierto.
 Tras confirmar se restablece Visitante. No hay búsqueda ni creación previa.
 [Contratos y verificación](../../docs/M1.2-customers.md).
+
+## Administración del catálogo
+
+M1.3 requiere la migración `ManageCatalog` aplicada manualmente antes de ejecutar
+la API. Ver [contratos, pruebas y pasos de edición](../../docs/M1.3-product-catalog.md).
+Catálogo permite crear bebidas, agregar variantes, editar precios y activar/desactivar.
+Los guardados recargan la lista; los conflictos conservan el formulario para revisión.

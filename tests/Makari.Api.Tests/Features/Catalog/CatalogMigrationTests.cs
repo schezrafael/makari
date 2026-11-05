@@ -8,6 +8,21 @@ namespace Makari.Api.Tests.Features.Catalog;
 public sealed class CatalogMigrationTests
 {
     [Fact]
+    public void ManagementMigration_AddsConcurrencyAndNonNegativeChecksWithoutChangingAmounts()
+    {
+        using var context = new MakariDbContext(new DbContextOptionsBuilder<MakariDbContext>()
+            .UseNpgsql("Host=localhost;Database=makari_migration_unit_tests").Options);
+        Assert.False(context.Database.HasPendingModelChanges());
+        var sql = context.GetService<IMigrator>().GenerateScript("20261105050434_SimplifyCustomerIdentification");
+        Assert.Contains("ADD \"Version\" uuid NOT NULL", sql);
+        Assert.Contains("CHECK (\"Amount\" >= 0)", sql);
+        Assert.Contains("CHECK (\"UnitPrice\" >= 0)", sql);
+        Assert.DoesNotContain("UPDATE ", sql);
+        Assert.DoesNotContain("DELETE ", sql);
+        Assert.DoesNotContain("INSERT INTO \"Sales\"", sql);
+    }
+
+    [Fact]
     public void Card_MigrationPreservesHistoricalSnapshotsAndPaymentValues()
     {
         using var context = new MakariDbContext(new DbContextOptionsBuilder<MakariDbContext>()

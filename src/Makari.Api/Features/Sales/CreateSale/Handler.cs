@@ -95,6 +95,7 @@ public sealed class CreateSaleHandler(MakariDbContext context, IConfiguration co
             request.IdempotencyKey, fingerprint, createdAtUtc, customer?.Id, customer?.Username);
 
         var variantIds = request.Items.Select(item => item.ProductVariantId).ToArray();
+        await TransactionAdvisoryLocks.AcquireCatalogAsync(context, true, cancellationToken);
         var prices = await SalePricing.LoadAsync(context, variantIds, request.CustomerType, cancellationToken);
         var priceByVariant = prices.ToDictionary(item => item.Id, item => item.Price);
         var unavailable = variantIds

@@ -9,7 +9,7 @@ public sealed class SaleItem
         ArgumentNullException.ThrowIfNull(sale);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(quantity);
         if (productVariantId == Guid.Empty) throw new ArgumentException("A product variant is required.", nameof(productVariantId));
-        if (unitPrice <= 0) throw new ArgumentOutOfRangeException(nameof(unitPrice));
+        if (unitPrice < 0) throw new ArgumentOutOfRangeException(nameof(unitPrice));
 
         Id = Guid.NewGuid();
         Sale = sale;

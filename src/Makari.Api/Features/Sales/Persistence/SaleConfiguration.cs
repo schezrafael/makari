@@ -10,7 +10,7 @@ public sealed class SaleConfiguration : IEntityTypeConfiguration<Sale>
     {
         builder.ToTable("Sales", table =>
         {
-            table.HasCheckConstraint("CK_Sales_Total_Positive", "\"Total\" > 0");
+            table.HasCheckConstraint("CK_Sales_Total_Positive", "\"Total\" >= 0");
             table.HasCheckConstraint("CK_Sales_CustomerType_Valid", "\"CustomerType\" IN (0, 1)");
             table.HasCheckConstraint("CK_Sales_PaymentMethod_Valid", "\"PaymentMethod\" IN (0, 1, 2)");
         });

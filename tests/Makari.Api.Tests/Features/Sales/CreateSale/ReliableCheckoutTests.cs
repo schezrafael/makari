@@ -100,10 +100,9 @@ public sealed class ReliableCheckoutTests
 
     [Theory]
     [InlineData(null)]
-    [InlineData(0d)]
     [InlineData(-1d)]
     [InlineData(60.001)]
-    public async Task ExpectedTotal_RequiredPositiveAndTwoDecimals(double? expected)
+    public async Task ExpectedTotal_RequiredNonNegativeAndTwoDecimals(double? expected)
     {
         using var factory = new CatalogApiFactory();
         using var client = factory.CreateClient();

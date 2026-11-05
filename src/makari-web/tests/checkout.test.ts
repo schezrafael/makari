@@ -156,3 +156,13 @@ test('username pendiente se conserva y rechaza otra identidad en el comprobante'
   await assert.rejects(resolveAttempt(db, restoreCheckout(db)), /Resultado no confirmado/)
   assert.deepEqual(restoreCheckout(db).attempt, request)
 })
+
+test('recupera y confirma un intento pendiente con total cero', async t => {
+  const db = storage()
+  const free = operation(makeOrder('Local', 'Transfer', draft.cart), 0)
+  prepareAttempt(db, { version: 1, draft }, free)
+  assert.deepEqual(restoreCheckout(db).attempt, free)
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ ...sale(free), total: 0, items: [{ id: saleId, productVariantId: id, quantity: 2, unitPrice: 0, subtotal: 0 }] }))
+  await resolveAttempt(db, restoreCheckout(db))
+  assert.equal(restoreCheckout(db).receipt?.sale.total, 0)
+})

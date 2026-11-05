@@ -12,16 +12,24 @@ public sealed class ProductPrice
             throw new ArgumentOutOfRangeException(nameof(customerType));
         }
 
-        if (amount <= 0 || amount > 9_999_999_999.99m || decimal.Round(amount, 2) != amount)
-        {
-            throw new ArgumentOutOfRangeException(nameof(amount),
-                "Amount must be positive and fit decimal(12,2) without rounding.");
-        }
+        ValidateAmount(amount);
 
         Id = Guid.NewGuid();
         ProductVariant = variant;
         ProductVariantId = variant.Id;
         CustomerType = customerType;
+        Amount = amount;
+    }
+
+    private static void ValidateAmount(decimal amount)
+    {
+        if (amount < 0 || amount > 9_999_999_999.99m || decimal.Round(amount, 2) != amount)
+            throw new ArgumentOutOfRangeException(nameof(amount), "Amount must be non-negative and fit decimal(12,2) without rounding.");
+    }
+
+    public void Update(decimal amount)
+    {
+        ValidateAmount(amount);
         Amount = amount;
     }
 

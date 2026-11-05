@@ -41,7 +41,7 @@ public sealed class CatalogPersistenceTests
         var sql = context.Database.GenerateCreateScript();
 
         Assert.Contains("\"Amount\" numeric(12,2) NOT NULL", sql);
-        Assert.Contains("CHECK (\"Amount\" > 0)", sql);
+        Assert.Contains("CHECK (\"Amount\" >= 0)", sql);
         Assert.Contains("CHECK (\"SizeMl\" > 0)", sql);
         Assert.Contains("CHECK (\"CustomerType\" IN (0, 1))", sql);
         Assert.Contains("CREATE UNIQUE INDEX", sql);

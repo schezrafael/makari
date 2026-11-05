@@ -121,6 +121,10 @@ namespace Makari.Api.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.ToTable("Products", (string)null);
@@ -148,7 +152,7 @@ namespace Makari.Api.Infrastructure.Persistence.Migrations
 
                     b.ToTable("ProductPrices", null, t =>
                         {
-                            t.HasCheckConstraint("CK_ProductPrices_Amount_Positive", "\"Amount\" > 0");
+                            t.HasCheckConstraint("CK_ProductPrices_Amount_Positive", "\"Amount\" >= 0");
 
                             t.HasCheckConstraint("CK_ProductPrices_CustomerType_Valid", "\"CustomerType\" IN (0, 1)");
                         });
@@ -270,7 +274,7 @@ namespace Makari.Api.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_Sales_PaymentMethod_Valid", "\"PaymentMethod\" IN (0, 1, 2)");
 
-                            t.HasCheckConstraint("CK_Sales_Total_Positive", "\"Total\" > 0");
+                            t.HasCheckConstraint("CK_Sales_Total_Positive", "\"Total\" >= 0");
                         });
                 });
 
@@ -307,9 +311,9 @@ namespace Makari.Api.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_SaleItems_Quantity_Positive", "\"Quantity\" > 0");
 
-                            t.HasCheckConstraint("CK_SaleItems_Subtotal_Positive", "\"Subtotal\" > 0");
+                            t.HasCheckConstraint("CK_SaleItems_Subtotal_Positive", "\"Subtotal\" >= 0");
 
-                            t.HasCheckConstraint("CK_SaleItems_UnitPrice_Positive", "\"UnitPrice\" > 0");
+                            t.HasCheckConstraint("CK_SaleItems_UnitPrice_Positive", "\"UnitPrice\" >= 0");
                         });
                 });
 

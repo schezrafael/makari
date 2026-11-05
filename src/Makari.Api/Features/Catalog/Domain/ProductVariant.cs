@@ -39,5 +39,21 @@ public sealed class ProductVariant
         return price;
     }
 
+    public void Update(string name, int sizeMl, bool isActive)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sizeMl);
+        Name = name.Trim();
+        SizeMl = sizeMl;
+        IsActive = isActive;
+    }
+
+    public void SetPrice(CustomerType customerType, decimal amount)
+    {
+        var price = _prices.SingleOrDefault(price => price.CustomerType == customerType);
+        if (price is null) AddPrice(customerType, amount);
+        else price.Update(amount);
+    }
+
     public void Deactivate() => IsActive = false;
 }

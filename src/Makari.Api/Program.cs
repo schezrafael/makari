@@ -1,3 +1,9 @@
+using Makari.Api.Features.Catalog.ListProducts;
+using Makari.Api.Features.Catalog.CreateProduct;
+using Makari.Api.Features.Catalog.UpdateProduct;
+using Makari.Api.Features.Catalog.CreateProductVariant;
+using Makari.Api.Features.Catalog.UpdateProductVariant;
+using Makari.Api.Features.Catalog.UpdateProductPrice;
 using Makari.Api.Features.Customers;
 using Makari.Api.Features.Catalog.GetCatalog;
 using Makari.Api.Features.Catalog.Persistence;
@@ -50,6 +56,12 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
 }
 
+app.MapListProductsEndpoint();
+app.MapCreateProductEndpoint();
+app.MapUpdateProductEndpoint();
+app.MapCreateProductVariantEndpoint();
+app.MapUpdateProductVariantEndpoint();
+app.MapUpdateProductPriceEndpoint();
 app.MapCustomerEndpoints();
 app.MapHealthEndpoint();
 app.MapGetCatalogEndpoint();

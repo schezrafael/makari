@@ -10,6 +10,13 @@ public static class TransactionAdvisoryLocks
     // The two-int PostgreSQL lock key is disjoint from the one-bigint sale-key lock space.
     private const int BusinessDateNamespace = 0x4D4B434C; // "MKCL"
 
+    public static async Task AcquireCatalogAsync(MakariDbContext context, bool shared, CancellationToken ct)
+    {
+        if (!context.Database.IsNpgsql()) return;
+        if (shared) await context.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock_shared(1296778049, 1)", ct);
+        else await context.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(1296778049, 1)", ct);
+    }
+
     public static async Task AcquireSaleIdempotencyKeyAsync(
         MakariDbContext context, Guid idempotencyKey, CancellationToken cancellationToken)
     {

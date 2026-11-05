@@ -10,7 +10,7 @@ public sealed class ProductPriceConfiguration : IEntityTypeConfiguration<Product
     {
         builder.ToTable("ProductPrices", table =>
         {
-            table.HasCheckConstraint("CK_ProductPrices_Amount_Positive", "\"Amount\" > 0");
+            table.HasCheckConstraint("CK_ProductPrices_Amount_Positive", "\"Amount\" >= 0");
             table.HasCheckConstraint("CK_ProductPrices_CustomerType_Valid", "\"CustomerType\" IN (0, 1)");
         });
         builder.HasKey(price => price.Id);
