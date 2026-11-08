@@ -1,6 +1,6 @@
 import type { Order } from './model.ts'
 
-export type QuoteRequest = Pick<Order, 'customerType' | 'items'>
+export type QuoteRequest = Pick<Order, 'customerType' | 'items' | 'saleCondition'>
 export type Quote = QuoteRequest & {
   subtotal: number
   discount: number
@@ -14,13 +14,14 @@ const record = (value: unknown): value is Record<string, unknown> => typeof valu
 const amount = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0
 
 export function isQuote(value: unknown, request: QuoteRequest): value is Quote {
-  if (!record(value) || value.customerType !== request.customerType || !amount(value.subtotal) || !amount(value.discount) || !amount(value.total) || !Array.isArray(value.items) || value.items.length !== request.items.length) return false
+  if (!record(value) || (request.saleCondition === undefined && value.customerType !== request.customerType) || !amount(value.subtotal) || !amount(value.discount) || !amount(value.total) || !Array.isArray(value.items) || value.items.length !== request.items.length) return false
+  if (request.saleCondition !== undefined && value.saleCondition !== request.saleCondition) return false
   const items = value.items
   return request.items.every(expected => items.filter(item => record(item) && item.productVariantId === expected.productVariantId && item.quantity === expected.quantity && amount(item.visitorUnitPrice) && amount(item.unitPrice) && amount(item.subtotal) && amount(item.discount) && amount(item.total) && cents(item.subtotal) === cents(item.visitorUnitPrice) * expected.quantity && cents(item.total) === cents(item.unitPrice) * expected.quantity && cents(item.subtotal) - cents(item.discount) === cents(item.total)).length === 1)
     && cents(value.subtotal) === items.reduce((sum, item) => sum + cents(item.subtotal), 0)
     && cents(value.discount) === items.reduce((sum, item) => sum + cents(item.discount), 0)
     && cents(value.total) === items.reduce((sum, item) => sum + cents(item.total), 0)
-    && (request.customerType !== 'Visitor' || value.discount === 0)
+    && ((request.saleCondition !== undefined ? request.saleCondition !== 'Normal' : request.customerType !== 'Visitor') || value.discount === 0)
 }
 
 // Cancellation also guards callbacks: a completed fetch may still be parsing JSON.

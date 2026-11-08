@@ -56,8 +56,8 @@ public sealed class FrequentCustomersTests
             Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
         }
         using var search = await client.GetAsync("/api/customers?username=Buyer0");
-        Assert.Equal(HttpStatusCode.NotFound, search.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, search.StatusCode);
         using var create = await client.PostAsJsonAsync("/api/customers", new { username = "Other" });
-        Assert.Equal(HttpStatusCode.NotFound, create.StatusCode);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, create.StatusCode);
     }
 }

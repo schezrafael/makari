@@ -91,12 +91,14 @@ public sealed class CreateSaleHandler(MakariDbContext context, IConfiguration co
                 ["customerId"] = ["The selected buyer does not exist."]
             }));
 
-        var sale = new Sale(request.CustomerType, request.PaymentMethod, operatorName,
-            request.IdempotencyKey, fingerprint, createdAtUtc, customer?.Id, customer?.Username);
+        var sale = new Sale(request.PricingType, request.EffectivePayment, operatorName,
+            request.IdempotencyKey, fingerprint, createdAtUtc, customer?.Id, customer?.Username, request.EffectiveCondition);
 
         var variantIds = request.Items.Select(item => item.ProductVariantId).ToArray();
         await TransactionAdvisoryLocks.AcquireCatalogAsync(context, true, cancellationToken);
-        var prices = await SalePricing.LoadAsync(context, variantIds, request.CustomerType, cancellationToken);
+        var prices = request.Legacy
+            ? await SalePricing.LoadAsync(context, variantIds, request.PricingType, cancellationToken)
+            : await SalePricing.LoadConditionAsync(context, variantIds, request.EffectiveCondition, cancellationToken);
         var priceByVariant = prices.ToDictionary(item => item.Id, item => item.Price);
         var unavailable = variantIds
             .Where(id => !priceByVariant.TryGetValue(id, out var price) || price is null)
@@ -111,7 +113,7 @@ public sealed class CreateSaleHandler(MakariDbContext context, IConfiguration co
         }
 
         foreach (var item in request.Items)
-            sale.AddItem(item.ProductVariantId, item.Quantity, priceByVariant[item.ProductVariantId]!.Value);
+            sale.AddItem(item.ProductVariantId, item.Quantity, priceByVariant[item.ProductVariantId]!.Value, request.Legacy ? null : prices.Single(price => price.Id == item.ProductVariantId).VisitorPrice);
 
         if (sale.Total != request.ExpectedTotal)
             return await RejectAsync(CreateSaleOutcome.PriceChanged(sale.Total));
@@ -185,7 +187,7 @@ public sealed class CreateSaleHandler(MakariDbContext context, IConfiguration co
         sale.RegisteredBy, sale.IdempotencyKey,
         sale.Items.OrderBy(item => item.ProductVariantId)
             .Select(item => new CreateSaleItemResponse(item.Id, item.ProductVariantId,
-                item.Quantity, item.UnitPrice, item.Subtotal)).ToArray(), sale.CustomerId, sale.CustomerUsernameSnapshot);
+                item.Quantity, item.UnitPrice, item.Subtotal, item.ReferenceUnitPrice, item.ReferenceUnitPrice * item.Quantity - item.Subtotal)).ToArray(), sale.CustomerId, sale.CustomerUsernameSnapshot, sale.SaleCondition);
 
     private static string NormalizeBuyer(string? username)
     {
@@ -198,7 +200,9 @@ public sealed class CreateSaleHandler(MakariDbContext context, IConfiguration co
     {
         var canonicalItems = request.Items.OrderBy(item => item.ProductVariantId)
             .Select(item => $"{item.ProductVariantId:N}:{item.Quantity.ToString(CultureInfo.InvariantCulture)}");
-        var canonical = $"{(int)request.CustomerType}|{(int)request.PaymentMethod}|{string.Join(';', canonicalItems)}";
+        var canonical = request.Legacy
+            ? $"{(int)request.CustomerType!.Value}|{(int?)request.EffectivePayment}|{string.Join(';', canonicalItems)}"
+            : $"v2|{(int)request.EffectiveCondition}|{(request.PaymentMethod is null ? "none" : ((int)request.PaymentMethod.Value).ToString(CultureInfo.InvariantCulture))}|{string.Join(';', canonicalItems)}";
         // Preserve fingerprints of pre-customer pending requests and historical sales.
         if (request.CustomerId is not null) canonical += $"|customer:{request.CustomerId.Value:N}";
         if (request.CustomerUsername is not null) canonical += $"|username:{NormalizeBuyer(request.CustomerUsername).ToLowerInvariant()}";

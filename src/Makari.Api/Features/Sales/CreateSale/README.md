@@ -1,5 +1,10 @@
 # CreateSale — M0.7 Reliable Checkout
 
+> M1.4: el contrato nuevo utiliza `saleCondition` y admite `paymentMethod: null`
+> para operaciones sin cobro. `customerType` se conserva solo como contrato legado.
+> Ver [condiciones de venta y compatibilidad](../../../../../docs/M1.4-sale-conditions.md).
+
+
 ```http
 POST /api/sales
 Content-Type: application/json

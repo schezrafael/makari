@@ -5,7 +5,7 @@ import type { Draft } from './checkout'
 import { startQuote } from './quote'
 import type { Quote, QuoteRequest } from './quote'
 import { useEffect, useRef, useState } from 'react'
-import { isCatalog, makeOrder, operation, totalCents } from './model'
+import { isCatalog, makeOrder, operation, totalCents, saleConditions, conditionLabels } from './model'
 import type { CustomerType, Product } from './model'
 
 const currency = (value: number) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value)
@@ -16,12 +16,13 @@ function Quantity({ name, value, disabled, onChange }: { name: string; value: nu
 
 export default function SalesPage() {
   const [checkout, setCheckout] = useState(emptyCheckout)
-  const { cart, localDiscount, payment } = checkout.draft
+  const { cart, payment } = checkout.draft
   const attempt = checkout.attempt
   const success = checkout.receipt?.sale
   const [ready, setReady] = useState(false)
   const [storageError, setStorageError] = useState(() => navigator.locks ? '' : 'Este navegador necesita HTTPS o localhost y Web Locks para recuperar ventas con seguridad.')
-  const customer: CustomerType = localDiscount ? 'Local' : 'Visitor'
+  const condition = checkout.draft.saleCondition ?? (checkout.draft.localDiscount ? 'LocalDiscount' : 'Normal')
+  const customer: CustomerType = condition === 'LocalDiscount' ? 'Local' : 'Visitor'
   const [quotation, setQuotation] = useState<{ key: string; quote?: Quote; error?: string } | null>(null)
   const [quoteRetry, setQuoteRetry] = useState(0)
   const [products, setProducts] = useState<Product[]>([])
@@ -34,7 +35,7 @@ export default function SalesPage() {
   const dialog = useRef<HTMLDialogElement>(null)
   const [confirming, setConfirming] = useState(false)
   const visitorSubtotal = totalCents(products, cart) / 100
-  const quoteKey = JSON.stringify({ customerType: customer, items: makeOrder(customer, payment, cart).items })
+  const quoteKey = JSON.stringify({ saleCondition: condition, items: makeOrder(customer, payment, cart).items })
   const currentQuote = quotation?.key === quoteKey ? quotation : null
   const quote = currentQuote?.quote
   const quoteBlocked = !quote
@@ -107,14 +108,11 @@ export default function SalesPage() {
     if (locked) return
     editDraft({
       ...checkout.draft, buyer: undefined, buyerInput: input, buyerGeneric: generic,
-      localDiscount: generic === 'visitante' ? false : generic === 'local' ? true : checkout.draft.localDiscount,
+      saleCondition: condition,
     })
   }
   function quantity(id: string, value: number) {
     editDraft({ ...checkout.draft, cart: { ...cart, [id]: value } })
-  }
-  function toggleDiscount() {
-    editDraft({ ...checkout.draft, localDiscount: !localDiscount })
   }
   function closeConfirmation() {
     if (inFlight.current) return
@@ -128,7 +126,7 @@ export default function SalesPage() {
     setSending(true)
     setError('')
     try {
-      const request = operation(makeOrder(customer, payment, cart, undefined, buyerUsername(checkout.draft)), total, attempt)
+      const request = operation(makeOrder(customer, total === 0 ? null : payment, cart, undefined, buyerUsername(checkout.draft), condition), total, attempt)
       const saved = prepareAttempt(localStorage, checkout, request)
       setCheckout(saved)
       const result = await resolveAttempt(localStorage, saved)
@@ -168,23 +166,23 @@ export default function SalesPage() {
         {unavailable && !loading && <div className="notice error" role="alert">Hay bebidas que ya no están disponibles. <button disabled={locked} onClick={() => { editDraft({ ...checkout.draft, cart: Object.fromEntries(lines.map(line => [line.id, cart[line.id]])) }) }}>quita las bebidas no disponibles</button>.</div>}
         <CustomerPicker input={buyerInput(checkout.draft)} generic={buyerGeneric(checkout.draft)} disabled={locked} onChange={selectBuyer} />
         {buyerError && <p className="notice error" role="alert">{buyerError}</p>}
-        <div className="discount-control">
-          <label><input type="checkbox" checked={localDiscount} disabled={locked} onChange={toggleDiscount} /> Descuento local</label>
-          <p>Aplica los precios locales vigentes a este pedido.</p>
-        </div>
+        <fieldset className="sale-conditions" disabled={locked}><legend>Condición de venta</legend>
+          <div className="buyer-actions">{saleConditions.map(value => <button key={value} type="button" aria-pressed={condition === value} onClick={() => editDraft({ ...checkout.draft, saleCondition: value, localDiscount: value === 'LocalDiscount' })}>{conditionLabels[value]}</button>)}</div>
+          <p className="payment-note">La clasificación del comprador no cambia el precio. Cumpleaños es una cortesía manual.</p>
+        </fieldset>
         {!attempt && count > 0 && quoteBlocked && (currentQuote?.error
           ? <div className="notice error" role="alert"><p>{currentQuote.error}</p><button disabled={locked} onClick={() => { setQuotation(null); setQuoteRetry(value => value + 1) }}>Reintentar cotización</button></div>
           : <p className="notice" role="status">Confirmando precios del pedido…</p>)}
         <dl className="price-breakdown" aria-live="polite">
           <div><dt>Subtotal visitante</dt><dd>{currency(subtotal)}</dd></div>
-          <div><dt>Descuento local</dt><dd>{!attempt && count > 0 && quoteBlocked ? '—' : `−${currency(discount)}`}</dd></div>
+          <div><dt>Descuento</dt><dd>{!attempt && count > 0 && quoteBlocked ? '—' : `−${currency(discount)}`}</dd></div>
         </dl>
-        <fieldset disabled={locked}><legend>Forma de pago</legend><div className="segmented">{(['Cash', 'Transfer', 'Card'] as const).map(method => <button key={method} aria-pressed={payment === method} onClick={() => { if (payment !== method) { editDraft({ ...checkout.draft, payment: method }) } }}>{method === 'Cash' ? 'Efectivo' : method === 'Transfer' ? 'Transferencia' : 'Tarjeta'}</button>)}</div></fieldset>
-        <p className="payment-note">Verifica que recibiste el pago antes de registrar.</p>
+        {total > 0 && <fieldset disabled={locked}><legend>Forma de pago</legend><div className="segmented">{(['Cash', 'Transfer', 'Card'] as const).map(method => <button key={method} aria-pressed={payment === method} onClick={() => { if (payment !== method) { editDraft({ ...checkout.draft, payment: method }) } }}>{method === 'Cash' ? 'Efectivo' : method === 'Transfer' ? 'Transferencia' : 'Tarjeta'}</button>)}</div></fieldset>}
+        <p className="payment-note">{total === 0 ? "Operación sin cobro · sin método de pago." : "Verifica que recibiste el pago antes de registrar."}</p>
         <div className="checkout"><div><span>Total a cobrar</span><strong>{!attempt && (loading || catalogError || unavailable || (count > 0 && quoteBlocked)) ? '—' : currency(total)}</strong></div><button className="primary" disabled={sending || confirming || !ready || !!storageError || (!attempt && (loading || !!catalogError || unavailable || count === 0 || quoteBlocked || !!buyerError))} onClick={() => { if (attempt) { void submit(); return } setConfirming(true); dialog.current?.showModal() }}>{sending ? 'Registrando…' : attempt ? 'Recuperar venta' : 'Registrar venta'} <span aria-hidden="true">↗</span></button></div><p className="total-note">Los precios se confirman al registrar.</p>
       </aside>
     </main>
     <footer>MAKARI DRINKS <span>Un sorbo de Zipolite.</span></footer>
-    <dialog ref={dialog} aria-labelledby="confirm-title" onCancel={event => { event.preventDefault(); closeConfirmation() }}><h2 id="confirm-title">Confirmar venta</h2><p>Comprador: {buyerInput(checkout.draft).trim() || buyerGeneric(checkout.draft) || 'visitante'}</p><p>{customer === 'Local' ? 'Cliente local' : 'Visitante'} · {payment === 'Cash' ? 'Efectivo' : payment === 'Transfer' ? 'Transferencia' : 'Tarjeta'}</p><ul className="confirmation-lines">{lines.map(line => <li key={line.id}>{cart[line.id]} × {line.product} · {line.name}</li>)}</ul><div className="confirm-total">Total a confirmar <strong>{currency(total)}</strong></div><p>Confirma este importe y el pago recibido. Si el precio cambió, no se registrará la venta y pediremos una nueva confirmación.</p><div className="dialog-actions"><button disabled={sending} onClick={closeConfirmation}>Volver</button><button className="primary" disabled={sending || quoteBlocked} onClick={() => void submit()}>{sending ? 'Registrando…' : 'Confirmar y registrar'}</button></div><p role="status">{sending ? 'Espera la confirmación. No cierres esta página.' : ''}</p></dialog>
+    <dialog ref={dialog} aria-labelledby="confirm-title" onCancel={event => { event.preventDefault(); closeConfirmation() }}><h2 id="confirm-title">Confirmar venta</h2><p>Comprador: {buyerInput(checkout.draft).trim() || buyerGeneric(checkout.draft) || 'visitante'}</p><p>{conditionLabels[condition]} · {total === 0 ? 'Sin cobro' : payment === 'Cash' ? 'Efectivo' : payment === 'Transfer' ? 'Transferencia' : 'Tarjeta'}</p><ul className="confirmation-lines">{lines.map(line => <li key={line.id}>{cart[line.id]} × {line.product} · {line.name}</li>)}</ul><div className="confirm-total">Total a confirmar <strong>{currency(total)}</strong></div><p>Confirma la condición y el importe de esta operación. Si el precio cambió, no se registrará la venta y pediremos una nueva confirmación.</p><div className="dialog-actions"><button disabled={sending} onClick={closeConfirmation}>Volver</button><button className="primary" disabled={sending || quoteBlocked} onClick={() => void submit()}>{sending ? 'Registrando…' : 'Confirmar y registrar'}</button></div><p role="status">{sending ? 'Espera la confirmación. No cierres esta página.' : ''}</p></dialog>
   </>
 }

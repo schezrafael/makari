@@ -11,7 +11,7 @@ public static class QuoteSaleEndpoint
             .WithName("QuoteSale")
             .WithTags("Sales")
             .WithSummary("Quote a sale using current catalog prices")
-            .WithDescription("Returns Visitor subtotal, Local discount and final total. Accepts only customerType and items; never writes a sale. Prices are revalidated by CreateSale.");
+            .WithDescription("Returns reference subtotal, discount, charged total and consumed units by saleCondition. Legacy customerType remains accepted for compatibility. Never writes a sale; CreateSale revalidates prices.");
         return endpoints;
     }
 
@@ -20,8 +20,9 @@ public static class QuoteSaleEndpoint
     {
         if (request is null)
             return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["request"] = ["A request body is required."] });
-        var errors = SaleOrderValidator.Validate(request.CustomerType, request.Items?.Select(item =>
+        var errors = SaleOrderValidator.Validate(request.CustomerType ?? request.PricingType, request.Items?.Select(item =>
             item is null ? null! : new CreateSaleItemRequest(item.ProductVariantId, item.Quantity)).ToArray());
+        if (!Enum.IsDefined(request.EffectiveCondition)) errors["saleCondition"] = ["Specify a valid sale condition."];
         if (errors.Count > 0) return TypedResults.ValidationProblem(errors);
         var result = await handler.HandleAsync(request, cancellationToken);
         return result.Errors is not null

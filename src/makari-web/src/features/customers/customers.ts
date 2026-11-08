@@ -1,9 +1,10 @@
-export type Customer = { id: string; username: string }
+export type Customer = { id: string; username: string; customerType?: 'Visitor' | 'Local' }
 export function isCustomer(value: unknown): value is Customer {
   if (typeof value !== 'object' || value === null) return false
   const item = value as Record<string, unknown>
   return typeof item.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id)
     && item.id !== '00000000-0000-0000-0000-000000000000'
+    && (item.customerType === undefined || item.customerType === 'Visitor' || item.customerType === 'Local')
     && typeof item.username === 'string' && /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,39}$/.test(item.username)
 }
 export function normalizeUsername(value: string): string {

@@ -15,6 +15,7 @@ public sealed class SaleItemConfiguration : IEntityTypeConfiguration<SaleItem>
             table.HasCheckConstraint("CK_SaleItems_UnitPrice_Positive", "\"UnitPrice\" >= 0");
             table.HasCheckConstraint("CK_SaleItems_Subtotal_Positive", "\"Subtotal\" >= 0");
         });
+        builder.Property(item => item.ReferenceUnitPrice).HasPrecision(12, 2);
         builder.HasKey(item => item.Id);
         builder.Property(item => item.Id).ValueGeneratedNever();
         builder.Property(item => item.ProductVariantId).IsRequired();

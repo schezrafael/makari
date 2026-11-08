@@ -7,13 +7,14 @@ public sealed record CreateSaleResponse(
     Guid Id,
     DateTimeOffset CreatedAtUtc,
     CustomerType CustomerType,
-    PaymentMethod PaymentMethod,
+    PaymentMethod? PaymentMethod,
     decimal Total,
     string RegisteredBy,
     Guid IdempotencyKey,
     IReadOnlyList<CreateSaleItemResponse> Items,
     Guid? CustomerId = null,
-    string? CustomerUsernameSnapshot = null);
+    string? CustomerUsernameSnapshot = null,
+    SaleCondition SaleCondition = SaleCondition.Normal);
 
 public sealed record CreateSaleItemResponse(
-    Guid Id, Guid ProductVariantId, int Quantity, decimal UnitPrice, decimal Subtotal);
+    Guid Id, Guid ProductVariantId, int Quantity, decimal UnitPrice, decimal Subtotal, decimal? ReferenceUnitPrice = null, decimal? Discount = null);

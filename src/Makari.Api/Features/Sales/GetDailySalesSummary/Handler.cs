@@ -27,7 +27,7 @@ public sealed class GetDailySalesSummaryHandler
         // SQLite (used by isolated integration tests) cannot translate ordering comparisons
         // on DateTimeOffset. PostgreSQL executes the aggregate projections below in SQL.
         if (_context.Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
-            return await HandleSqliteAsync(date, startUtc, endUtc, cancellationToken);
+            return await AddConditionsAsync(await HandleSqliteAsync(date, startUtc, endUtc, cancellationToken), startUtc, endUtc, cancellationToken);
 
         var sales = _context.Sales.AsNoTracking()
             .Where(sale => sale.CreatedAtUtc >= startUtc && sale.CreatedAtUtc < endUtc);
@@ -68,7 +68,7 @@ public sealed class GetDailySalesSummaryHandler
                 item.ProductVariantId, item.ProductName, item.VariantName, item.Quantity, item.Revenue))
             .ToArray();
 
-        return new GetDailySalesSummaryResponse(
+        return await AddConditionsAsync(new GetDailySalesSummaryResponse(
             date,
             _timeZone.Id,
             totals?.Count ?? 0,
@@ -77,7 +77,7 @@ public sealed class GetDailySalesSummaryHandler
             totals?.Transfer ?? 0m,
             totals?.Card ?? 0m,
             variants.Sum(item => item.Quantity),
-            variants);
+            variants), startUtc, endUtc, cancellationToken);
     }
 
     private async Task<GetDailySalesSummaryResponse> HandleSqliteAsync(
@@ -106,6 +106,32 @@ public sealed class GetDailySalesSummaryHandler
             sales.Where(sale => sale.PaymentMethod == PaymentMethod.Transfer).Sum(sale => sale.Total),
             sales.Where(sale => sale.PaymentMethod == PaymentMethod.Card).Sum(sale => sale.Total),
             variants.Sum(item => item.Quantity), variants);
+    }
+
+    private async Task<GetDailySalesSummaryResponse> AddConditionsAsync(GetDailySalesSummaryResponse response,
+        DateTimeOffset start, DateTimeOffset end, CancellationToken ct)
+    {
+        var query = from item in _context.SaleItems.AsNoTracking()
+                    join sale in _context.Sales.AsNoTracking() on item.SaleId equals sale.Id
+                    select new { sale.Id, sale.CreatedAtUtc, sale.SaleCondition, item.Quantity, item.UnitPrice, item.Subtotal };
+        ConditionDailySummary[] conditions;
+        long paid, free;
+        if (_context.Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+        {
+            var rows = (await query.ToListAsync(ct)).Where(x => x.CreatedAtUtc >= start && x.CreatedAtUtc < end).ToArray();
+            paid = rows.Where(x => x.UnitPrice > 0).Sum(x => (long)x.Quantity);
+            free = rows.Where(x => x.UnitPrice == 0).Sum(x => (long)x.Quantity);
+            conditions = rows.GroupBy(x => x.SaleCondition).Select(g => new ConditionDailySummary(g.Key, g.Select(x => x.Id).Distinct().Count(), g.Sum(x => (long)x.Quantity), g.Sum(x => x.Subtotal))).ToArray();
+        }
+        else
+        {
+            query = query.Where(x => x.CreatedAtUtc >= start && x.CreatedAtUtc < end);
+            var units = await query.GroupBy(x => x.UnitPrice > 0).Select(g => new { Paid = g.Key, Units = g.Sum(x => (long)x.Quantity) }).ToListAsync(ct);
+            paid = units.Where(x => x.Paid).Sum(x => x.Units);
+            free = units.Where(x => !x.Paid).Sum(x => x.Units);
+            conditions = await query.GroupBy(x => x.SaleCondition).Select(g => new ConditionDailySummary(g.Key, g.Select(x => x.Id).Distinct().Count(), g.Sum(x => (long)x.Quantity), g.Sum(x => x.Subtotal))).ToArrayAsync(ct);
+        }
+        return response with { PaidUnits = paid, FreeUnits = free, Conditions = Enum.GetValues<SaleCondition>().Select(c => conditions.SingleOrDefault(x => x.SaleCondition == c) ?? new(c, 0, 0, 0)).ToArray() };
     }
 
     private DateTimeOffset LocalMidnightToUtc(DateOnly date)

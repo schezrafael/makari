@@ -4,7 +4,7 @@ public sealed class SaleItem
 {
     private SaleItem() { }
 
-    internal SaleItem(Sale sale, Guid productVariantId, int quantity, decimal unitPrice)
+    internal SaleItem(Sale sale, Guid productVariantId, int quantity, decimal unitPrice, decimal? referenceUnitPrice = null)
     {
         ArgumentNullException.ThrowIfNull(sale);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(quantity);
@@ -16,6 +16,8 @@ public sealed class SaleItem
         SaleId = sale.Id;
         ProductVariantId = productVariantId;
         Quantity = quantity;
+        if (referenceUnitPrice < unitPrice) throw new ArgumentOutOfRangeException(nameof(referenceUnitPrice));
+        ReferenceUnitPrice = referenceUnitPrice;
         UnitPrice = unitPrice;
         Subtotal = SaleAmounts.Subtotal(unitPrice, quantity);
     }
@@ -25,6 +27,7 @@ public sealed class SaleItem
     public Sale Sale { get; private set; } = null!;
     public Guid ProductVariantId { get; private set; }
     public int Quantity { get; private set; }
+    public decimal? ReferenceUnitPrice { get; private set; }
     public decimal UnitPrice { get; private set; }
     public decimal Subtotal { get; private set; }
 }

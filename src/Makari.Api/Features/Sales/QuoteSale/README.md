@@ -1,5 +1,10 @@
 # QuoteSale — M0.6
 
+> M1.4: el contrato nuevo utiliza `saleCondition` y admite `paymentMethod: null`
+> para operaciones sin cobro. `customerType` se conserva solo como contrato legado.
+> Ver [condiciones de venta y compatibilidad](../../../../../docs/M1.4-sale-conditions.md).
+
+
 `POST /api/sales/quote` consulta precios vigentes sin crear ni modificar ventas.
 
 Solicitud (solo estos campos; no admite importes, pago ni clave de idempotencia):

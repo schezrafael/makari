@@ -5,3 +5,5 @@ MakariOS es una plataforma en desarrollo para administrar Makari Drinks, un proy
 La plataforma busca registrar ingredientes, costos, rendimientos y mermas para mantener la trazabilidad de cada lote y conocer el costo y margen de cada bebida. El punto de venta será un módulo dentro de este sistema, junto con herramientas de análisis para mejorar las recetas y tomar decisiones basadas en la operación real del negocio.
 
 La administración del catálogo del POS está documentada en [M1.3](docs/M1.3-product-catalog.md).
+
+La clasificación de compradores y las condiciones comerciales se documentan en [M1.4](docs/M1.4-sale-conditions.md).

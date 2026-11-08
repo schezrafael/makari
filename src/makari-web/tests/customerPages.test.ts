@@ -21,7 +21,7 @@ const id = '11111111-1111-4111-8111-111111111111'
 afterEach(async () => { if (root) await act(async () => root.unmount()); localStorage.clear() })
 
 const visitor = { id: 'a1200000-0000-4000-8000-000000000001', username: 'visitante' }
-const local = { id: 'a1200000-0000-4000-8000-000000000002', username: 'local' }
+const local = { id: 'a1200000-0000-4000-8000-000000000002', username: 'local', customerType: 'Visitor' }
 const named = { id: 'a1200000-0000-4000-8000-000000000003', username: 'Ana Luna' }
 async function editUsername(value: string) {
   const input = document.querySelector<HTMLInputElement>('#buyer-username')!
@@ -31,12 +31,13 @@ async function editUsername(value: string) {
   })
 }
 function commonResponse(url: string, options?: RequestInit): Response | undefined {
+  if (url.startsWith('/api/customers?username=')) return Response.json(url.endsWith('local') ? local : { ...visitor, customerType: 'Visitor' })
   if (url === '/api/customers/frequent?limit=5') return Response.json([named])
   if (url === '/api/catalog') return Response.json({ products: [{ id, name: 'Cold Brew', category: 'Bebidas', variants: [{ id, name: 'Natural', sizeMl: 300, price: 60 }] }] })
   if (url === '/api/sales/quote') {
     const request = JSON.parse(options!.body as string)
     assert.equal(request.customerId, undefined)
-    const price = request.customerType === 'Local' ? 50 : 60
+    const price = request.saleCondition === 'LocalDiscount' || request.customerType === 'Local' ? 50 : 60
     return Response.json({ ...request, subtotal: 60, discount: 60 - price, total: price, items: [{ ...request.items[0], visitorUnitPrice: 60, unitPrice: price, subtotal: 60, discount: 60 - price, total: price }] })
   }
 }
@@ -54,22 +55,23 @@ test('input vacío y V por defecto; L/V, frecuentes y escritura sin consultas po
   assert.equal(button('Buscar'), undefined)
   await act(async () => button('L').click())
   assert.equal(input().value, '')
-  assert.equal(restoreCheckout(localStorage).draft.localDiscount, true)
+  assert.equal(restoreCheckout(localStorage).draft.localDiscount, false)
   const calls = fetchMock.mock.callCount()
   await editUsername('Nuevo')
   await editUsername('Nuevo username')
   assert.equal(fetchMock.mock.callCount(), calls)
   assert.equal(button('V').getAttribute('aria-pressed'), 'false')
   assert.equal(button('L').getAttribute('aria-pressed'), 'false')
-  assert.equal(restoreCheckout(localStorage).draft.localDiscount, true)
+  assert.equal(restoreCheckout(localStorage).draft.localDiscount, false)
   await act(async () => button('Ana Luna').click())
   assert.equal(input().value, 'Ana Luna')
   await act(async () => root.unmount())
   await mount()
   assert.equal(input().value, 'Ana Luna')
-  await act(async () => document.querySelector<HTMLInputElement>('.discount-control input')!.click())
+  await act(async () => button('Descuento local').click())
   assert.equal(input().value, 'Ana Luna')
-  assert.equal(restoreCheckout(localStorage).draft.localDiscount, false)
+  assert.equal(restoreCheckout(localStorage).draft.saleCondition, 'LocalDiscount')
+  await act(async () => button('Normal').click())
   await act(async () => button('L').click())
   await editUsername('Temporal')
   await editUsername('')

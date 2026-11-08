@@ -1,10 +1,10 @@
 import { isCustomer, normalizeUsername } from '../customers/customers.ts'
 import type { Customer } from '../customers/customers.ts'
-import { isConfirmedSale, makeOrder } from './model.ts'
-import type { Cart, PaymentMethod, SaleRequest, SaleResponse } from './model.ts'
+import { isConfirmedSale, makeOrder, saleConditions } from './model.ts'
+import type { Cart, PaymentMethod, SaleRequest, SaleResponse, SaleCondition } from './model.ts'
 
 export const checkoutKey = 'makari.checkout.v1'
-export type Draft = { cart: Cart; localDiscount: boolean; payment: PaymentMethod; buyer?: Customer; buyerInput?: string; buyerGeneric?: 'visitante' | 'local' }
+export type Draft = { cart: Cart; saleCondition?: SaleCondition; localDiscount: boolean; payment: PaymentMethod; buyer?: Customer; buyerInput?: string; buyerGeneric?: 'visitante' | 'local' }
 export type Checkout = {
   version: 1
   draft: Draft
@@ -31,12 +31,20 @@ const quantity = (value: unknown): value is number => Number.isInteger(value) &&
 const amount = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0 && Number.isSafeInteger(Math.round(value * 100)) && Math.abs(value * 100 - Math.round(value * 100)) < 0.00001
 
 function validRequest(value: unknown): value is SaleRequest {
+  if (!object(value)) return false
+  const paidMethod = ['Cash', 'Transfer', 'Card'].includes(String(value.paymentMethod))
+  const condition = value.saleCondition
+  if (condition !== undefined) {
+    if (!saleConditions.includes(condition as SaleCondition)) return false
+    if (['Courtesy', 'Staff', 'Birthday'].includes(String(condition)) && value.expectedTotal !== 0) return false
+    if (value.expectedTotal === 0 ? value.paymentMethod !== null : !paidMethod) return false
+  } else if (!paidMethod) return false
   return object(value) && (value.customerUsername === undefined || typeof value.customerUsername === 'string' && value.customerUsername.length <= 256)
     && !(value.customerId != null && value.customerUsername !== undefined) && (value.customerId == null || uuid(value.customerId)) && uuid(value.idempotencyKey) && amount(value.expectedTotal) &&
-    ['Local', 'Visitor'].includes(String(value.customerType)) && ['Cash', 'Transfer', 'Card'].includes(String(value.paymentMethod)) &&
+    (value.saleCondition !== undefined || ['Local', 'Visitor'].includes(String(value.customerType))) && (value.saleCondition === undefined || saleConditions.includes(value.saleCondition as SaleCondition)) && (['Cash', 'Transfer', 'Card'].includes(String(value.paymentMethod)) || (value.saleCondition !== undefined && value.expectedTotal === 0 && value.paymentMethod === null)) &&
     Array.isArray(value.items) && value.items.length > 0 && value.items.every(item => object(item) && uuid(item.productVariantId) && quantity(item.quantity)) &&
     new Set(value.items.map(item => item.productVariantId)).size === value.items.length &&
-    Object.keys(value).every(key => ['customerType', 'paymentMethod', 'items', 'idempotencyKey', 'expectedTotal', 'customerId', 'customerUsername'].includes(key)) &&
+    Object.keys(value).every(key => ['customerType', 'saleCondition', 'paymentMethod', 'items', 'idempotencyKey', 'expectedTotal', 'customerId', 'customerUsername'].includes(key)) &&
     value.items.every(item => Object.keys(item).every(key => ['productVariantId', 'quantity'].includes(key)))
 }
 
@@ -51,6 +59,10 @@ export function restoreCheckout(storage: CheckoutStorage): Checkout {
     !Object.entries(value.draft.cart).every(([id, count]) => uuid(id) && quantity(count)))
     throw new Error('El borrador guardado es inválido o usa otra versión. No se ha borrado; revisa el almacenamiento antes de cobrar.')
   const draft: Draft = { cart: { ...value.draft.cart } as Cart, localDiscount: value.draft.localDiscount, payment: value.draft.payment as PaymentMethod }
+  if (value.draft.saleCondition !== undefined) {
+    if (!saleConditions.includes(value.draft.saleCondition as SaleCondition)) throw new Error('La condición guardada no es válida.')
+    draft.saleCondition = value.draft.saleCondition as SaleCondition
+  }
   if (value.draft.buyer !== undefined) {
     if (!isCustomer(value.draft.buyer)) throw new Error('El comprador guardado no es válido. No se ha borrado el borrador.')
     draft.buyer = value.draft.buyer
@@ -66,8 +78,9 @@ export function restoreCheckout(storage: CheckoutStorage): Checkout {
   const result: Checkout = { version: 1, draft }
   if (value.attempt !== undefined) {
     if (!validRequest(value.attempt)) throw new Error('El intento guardado es inválido. No inicies otra venta hasta revisar su clave.')
-    const order = makeOrder(draft.localDiscount ? 'Local' : 'Visitor', draft.payment, draft.cart, value.attempt.customerUsername === undefined ? draft.buyer?.id : undefined, value.attempt.customerUsername === undefined ? undefined : buyerUsername(draft))
-    const attemptOrder = makeOrder(value.attempt.customerType, value.attempt.paymentMethod, Object.fromEntries(value.attempt.items.map(item => [item.productVariantId, item.quantity])), value.attempt.customerId, value.attempt.customerUsername)
+    const condition = draft.saleCondition ?? (draft.localDiscount ? 'LocalDiscount' : 'Normal')
+    const order = makeOrder((value.attempt.saleCondition === undefined ? draft.localDiscount : condition === 'LocalDiscount') ? 'Local' : 'Visitor', value.attempt.saleCondition !== undefined && value.attempt.expectedTotal === 0 ? null : draft.payment, draft.cart, value.attempt.customerUsername === undefined ? draft.buyer?.id : undefined, value.attempt.customerUsername === undefined ? undefined : buyerUsername(draft), value.attempt.saleCondition === undefined ? undefined : condition)
+    const attemptOrder = makeOrder(value.attempt.customerType, value.attempt.paymentMethod, Object.fromEntries(value.attempt.items.map(item => [item.productVariantId, item.quantity])), value.attempt.customerId, value.attempt.customerUsername, value.attempt.saleCondition)
     if (JSON.stringify(order) !== JSON.stringify(attemptOrder)) throw new Error('El borrador y el intento guardado no coinciden. Se requiere revisar la operación.')
     result.attempt = value.attempt
   }

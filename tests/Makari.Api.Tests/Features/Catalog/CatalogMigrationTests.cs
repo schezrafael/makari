@@ -13,7 +13,7 @@ public sealed class CatalogMigrationTests
         using var context = new MakariDbContext(new DbContextOptionsBuilder<MakariDbContext>()
             .UseNpgsql("Host=localhost;Database=makari_migration_unit_tests").Options);
         Assert.False(context.Database.HasPendingModelChanges());
-        var sql = context.GetService<IMigrator>().GenerateScript("20261105050434_SimplifyCustomerIdentification");
+        var sql = context.GetService<IMigrator>().GenerateScript("20261105050434_SimplifyCustomerIdentification", "20261105053626_ManageCatalog");
         Assert.Contains("ADD \"Version\" uuid NOT NULL", sql);
         Assert.Contains("CHECK (\"Amount\" >= 0)", sql);
         Assert.Contains("CHECK (\"UnitPrice\" >= 0)", sql);

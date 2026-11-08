@@ -1,4 +1,4 @@
-# Makari POS — M1.3 Catálogo
+# Makari POS — M1.4 Condiciones de venta
 
 La navegación permite abrir Nueva venta, Ventas del día, Catálogo y Cierre de caja. El cierre muestra
 los totales del servidor, calcula efectivo esperado y diferencia, y conserva un comprobante
@@ -215,3 +215,11 @@ M1.3 requiere la migración `ManageCatalog` aplicada manualmente antes de ejecut
 la API. Ver [contratos, pruebas y pasos de edición](../../docs/M1.3-product-catalog.md).
 Catálogo permite crear bebidas, agregar variantes, editar precios y activar/desactivar.
 Los guardados recargan la lista; los conflictos conservan el formulario para revisión.
+
+## Clasificación y condición de venta
+
+M1.4 requiere `CustomerClassificationAndSaleConditions`, aplicada manualmente antes
+de desplegar el backend nuevo. Nueva venta mantiene usernames, V/L y frecuentes;
+la clasificación se consulta/actualiza por separado y no aplica descuentos. Elige
+Normal, Descuento local, Cortesía, Staff o Cumpleaños. Total cero oculta el pago.
+Ver [contratos, migración y recuperación](../../docs/M1.4-sale-conditions.md).

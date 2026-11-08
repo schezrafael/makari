@@ -191,6 +191,10 @@ namespace Makari.Api.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("CustomerType")
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<string>("NormalizedUsername")
                         .IsRequired()
                         .ValueGeneratedOnAddOrUpdate()
@@ -208,17 +212,22 @@ namespace Makari.Api.Infrastructure.Persistence.Migrations
                     b.HasIndex("NormalizedUsername")
                         .IsUnique();
 
-                    b.ToTable("Customers", (string)null);
+                    b.ToTable("Customers", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Customers_CustomerType_Valid", "\"CustomerType\" IN (0, 1)");
+                        });
 
                     b.HasData(
                         new
                         {
                             Id = new Guid("a1200000-0000-4000-8000-000000000001"),
+                            CustomerType = 1,
                             Username = "visitante"
                         },
                         new
                         {
                             Id = new Guid("a1200000-0000-4000-8000-000000000002"),
+                            CustomerType = 1,
                             Username = "local"
                         });
                 });
@@ -244,7 +253,7 @@ namespace Makari.Api.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("IdempotencyKey")
                         .HasColumnType("uuid");
 
-                    b.Property<int>("PaymentMethod")
+                    b.Property<int?>("PaymentMethod")
                         .HasColumnType("integer");
 
                     b.Property<string>("RegisteredBy")
@@ -256,6 +265,9 @@ namespace Makari.Api.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
+
+                    b.Property<int>("SaleCondition")
+                        .HasColumnType("integer");
 
                     b.Property<decimal>("Total")
                         .HasPrecision(28, 2)
@@ -272,7 +284,11 @@ namespace Makari.Api.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_Sales_CustomerType_Valid", "\"CustomerType\" IN (0, 1)");
 
+                            t.HasCheckConstraint("CK_Sales_FreeCondition", "\"SaleCondition\" IN (0, 1) OR (CAST(\"Total\" AS numeric) = 0 AND \"PaymentMethod\" IS NULL)");
+
                             t.HasCheckConstraint("CK_Sales_PaymentMethod_Valid", "\"PaymentMethod\" IN (0, 1, 2)");
+
+                            t.HasCheckConstraint("CK_Sales_SaleCondition_Valid", "\"SaleCondition\" IN (0, 1, 2, 3, 4)");
 
                             t.HasCheckConstraint("CK_Sales_Total_Positive", "\"Total\" >= 0");
                         });
@@ -288,6 +304,10 @@ namespace Makari.Api.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("Quantity")
                         .HasColumnType("integer");
+
+                    b.Property<decimal?>("ReferenceUnitPrice")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
 
                     b.Property<Guid>("SaleId")
                         .HasColumnType("uuid");

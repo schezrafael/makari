@@ -13,7 +13,7 @@ public sealed class CustomerMigrationTests
         using var db = new MakariDbContext(new DbContextOptionsBuilder<MakariDbContext>()
             .UseNpgsql("Host=localhost;Database=makari_migration_unit_tests").Options);
         Assert.False(db.Database.HasPendingModelChanges());
-        var sql = db.GetService<IMigrator>().GenerateScript("20261105040101_AddCustomers");
+        var sql = db.GetService<IMigrator>().GenerateScript("20261105040101_AddCustomers", "20261105050434_SimplifyCustomerIdentification");
         Assert.Contains("NOT EXISTS", sql);
         Assert.Contains("'visitante'", sql);
         Assert.Contains("'local'", sql);

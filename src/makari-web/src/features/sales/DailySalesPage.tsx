@@ -1,3 +1,4 @@
+import { conditionLabels, type SaleCondition } from './model'
 import { StatusMessage, PageHeader, MetricCard, MoneyDisplay } from '../../components/ui'
 import { useEffect, useState } from 'react'
 import { fetchDailySummary } from './dailySummary'
@@ -28,13 +29,17 @@ export default function DailySalesPage() {
     <PageHeader title="Ventas del día" description="Resumen de ventas registradas en la fecha local del negocio."><label className="summary-date">Fecha<input type="date" value={date || summary?.date || ''} onChange={event => { setDate(event.target.value); setLoading(true); setError('') }} aria-label="Fecha del resumen" /></label></PageHeader>
     {loading ? <StatusMessage>Cargando resumen…</StatusMessage> : error ? <div className="notice error summary-error" role="alert"><p>{error}</p><button onClick={() => { setLoading(true); setError(''); setReload(value => value + 1) }}>Reintentar</button></div> : summary && <>
       <section className="summary-cards" aria-label="Totales del día">
-        <MetricCard label="Total vendido"><MoneyDisplay value={summary.totalRevenue} /></MetricCard>
+        <MetricCard label="Ingresos reales"><MoneyDisplay value={summary.totalRevenue} /></MetricCard>
         <MetricCard label="Ventas registradas">{summary.salesCount}</MetricCard>
         <MetricCard label="Efectivo"><MoneyDisplay value={summary.cashRevenue} /></MetricCard>
         <MetricCard label="Transferencias"><MoneyDisplay value={summary.transferRevenue} /></MetricCard>
         <MetricCard label="Tarjeta"><MoneyDisplay value={summary.cardRevenue} /></MetricCard>
+        <MetricCard label="Unidades registradas">{summary.unitsRegistered ?? summary.unitsSold}</MetricCard>
+        <MetricCard label="Unidades cobradas">{summary.paidUnits ?? '—'}</MetricCard>
+        <MetricCard label="Unidades gratuitas">{summary.freeUnits ?? '—'}</MetricCard>
       </section>
-      <section className="summary-variants" aria-labelledby="variants-title"><h2 id="variants-title">Bebidas vendidas <span className="badge">{summary.unitsSold} unidades</span></h2>
+      {summary.conditions && <section className="summary-cards" aria-label="Condiciones de venta">{summary.conditions.map(item => <MetricCard key={item.saleCondition} label={conditionLabels[item.saleCondition as SaleCondition] ?? item.saleCondition}>{item.units} unidades · {item.operations} operaciones</MetricCard>)}</section>}
+      <section className="summary-variants" aria-labelledby="variants-title"><h2 id="variants-title">Bebidas registradas <span className="badge">{summary.unitsSold} unidades</span></h2>
         {summary.variants.length === 0 ? <div className="summary-empty"><span aria-hidden="true">✳</span><p>No hay ventas registradas para esta fecha.</p></div> : <ul>{summary.variants.map(variant => <li key={variant.productVariantId}><div><strong>{variant.productName} · {variant.variantName}</strong><span>{variant.quantity} {variant.quantity === 1 ? 'unidad' : 'unidades'}</span></div><strong>{currency(variant.revenue)}</strong></li>)}</ul>}
       </section>
       <p className="payment-note">Zona horaria: {summary.timeZoneId}</p>
