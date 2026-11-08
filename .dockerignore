@@ -1,0 +1,34 @@
+# Only application sources and SDK selection enter the build context.
+**
+!global.json
+!src/
+!src/Makari.Api/
+!src/Makari.Api/**
+!src/makari-web/
+!src/makari-web/**
+
+# Generated output, local settings and credentials must never enter image layers.
+**/bin
+**/obj
+**/node_modules
+**/dist
+**/coverage
+**/TestResults
+**/tests
+**/*.tsbuildinfo
+**/*.log
+**/.git
+**/.env
+**/.env.*
+**/.npmrc
+**/NuGet.Config
+**/nuget.config
+**/appsettings.*.json
+**/Properties/launchSettings.json
+**/*.user
+**/*.suo
+**/*.pfx
+**/*.p12
+**/*.pem
+**/*.key
+**/.DS_Store

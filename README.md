@@ -7,3 +7,5 @@ La plataforma busca registrar ingredientes, costos, rendimientos y mermas para m
 La administración del catálogo del POS está documentada en [M1.3](docs/M1.3-product-catalog.md).
 
 La clasificación de compradores y las condiciones comerciales se documentan en [M1.4](docs/M1.4-sale-conditions.md).
+
+El despliegue de frontend y API en un servicio Docker se describe en [Railway](docs/railway-deployment.md), incluyendo variables, verificación y el bloqueo de acceso público sin autenticación.
